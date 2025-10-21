@@ -6,7 +6,10 @@ import {
   GraduationCap,
   Bell,
   Settings,
-  X
+  X,
+  Home,
+  FileText,
+  CreditCard
 } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -23,6 +26,9 @@ const menuItems = [
   { id: "enrolment", label: "Enrolment", icon: ClipboardList },
   { id: "schedule", label: "Schedule", icon: Calendar },
   { id: "grades", label: "Grades", icon: GraduationCap },
+  { id: "dormitory", label: "Dormitory", icon: Home },
+  { id: "thesis", label: "Thesis", icon: FileText },
+  { id: "payments", label: "Payments", icon: CreditCard },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "settings", label: "Settings", icon: Settings },
 ];

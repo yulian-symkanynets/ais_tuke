@@ -6,6 +6,9 @@ import { SubjectsPage } from "./components/SubjectsPage";
 import { EnrolmentPage } from "./components/EnrolmentPage";
 import { SchedulePage } from "./components/SchedulePage";
 import { GradesPage } from "./components/GradesPage";
+import { DormitoryPage } from "./components/DormitoryPage";
+import { ThesisPage } from "./components/ThesisPage";
+import { PaymentsPage } from "./components/PaymentsPage";
 import { NotificationsPage } from "./components/NotificationsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { ProfilePage } from "./components/ProfilePage";
@@ -36,6 +39,12 @@ export default function App() {
         return <SchedulePage />;
       case "grades":
         return <GradesPage />;
+      case "dormitory":
+        return <DormitoryPage />;
+      case "thesis":
+        return <ThesisPage />;
+      case "payments":
+        return <PaymentsPage />;
       case "notifications":
         return <NotificationsPage />;
       case "settings":

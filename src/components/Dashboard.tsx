@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Calendar, BookOpen, TrendingUp, Clock } from "lucide-react";
+import { Calendar, BookOpen, TrendingUp, Clock, Newspaper, Pin } from "lucide-react";
 
 export function Dashboard() {
   const upcomingExams = [
@@ -30,11 +30,61 @@ export function Dashboard() {
     { type: "info", message: "Schedule change: Database Systems moved to PK6 C208", time: "2 days ago" },
   ];
 
+  const newsItems = [
+    {
+      id: 1,
+      title: "Winter Exam Period Schedule Released",
+      description: "The official exam schedule for Winter Semester 2025/26 is now available in the Grades section.",
+      date: "October 20, 2025",
+      category: "Academic",
+      pinned: true,
+    },
+    {
+      id: 2,
+      title: "Student Career Fair 2025",
+      description: "Meet top tech companies and explore internship opportunities. November 15-16 in Main Hall.",
+      date: "October 18, 2025",
+      category: "Events",
+      pinned: false,
+    },
+    {
+      id: 3,
+      title: "Library Extended Hours During Exam Period",
+      description: "The university library will be open 24/7 from December 1st to support students during exams.",
+      date: "October 17, 2025",
+      category: "Services",
+      pinned: false,
+    },
+    {
+      id: 4,
+      title: "New AI Research Lab Opening",
+      description: "State-of-the-art AI research facility opens next month. Applications for student assistants now open.",
+      date: "October 15, 2025",
+      category: "Research",
+      pinned: false,
+    },
+  ];
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "Academic":
+        return "bg-blue-600";
+      case "Events":
+        return "bg-purple-600";
+      case "Services":
+        return "bg-green-600";
+      case "Research":
+        return "bg-orange-600";
+      default:
+        return "bg-gray-600";
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Hero Section */}
       <div className="rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-primary-foreground shadow-lg">
-        <h1 className="text-3xl mb-2">Welcome, Yulian!</h1>
+        <h1 className="text-3xl mb-2" style={{ fontFamily: "'Brush Script MT', 'Lucida Handwriting', cursive" }}>Welcome, Yulian!</h1>
         <p className="opacity-90">
           Winter Term 2025/26 • Week 8 of 13
         </p>
@@ -108,6 +158,49 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* News/Aktuality Section */}
+      <Card className="shadow-md border-0">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Newspaper className="h-5 w-5 text-primary" />
+            <CardTitle>Aktuality / News</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {newsItems.map((news) => (
+              <div
+                key={news.id}
+                className="p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors border-l-4 border-primary/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      {news.pinned && (
+                        <Pin className="h-4 w-4 text-primary fill-primary" />
+                      )}
+                      <h3 className="font-medium">{news.title}</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {news.description}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <Badge className={getCategoryColor(news.category)}>
+                        {news.category}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {news.date}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Schedule and Notifications */}
       <div className="grid gap-6 lg:grid-cols-3">
