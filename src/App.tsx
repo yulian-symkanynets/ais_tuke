@@ -14,10 +14,12 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { LoginPage } from "./components/LoginPage";
 import { RegisterPage } from "./components/RegisterPage";
+import { TeacherDashboard } from "./components/TeacherDashboard";
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [userRole, setUserRole] = useState<string>("student");
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -26,8 +28,11 @@ export default function App() {
   useEffect(() => {
     // Check if user is already logged in
     const token = localStorage.getItem("authToken");
-    if (token) {
+    const student = localStorage.getItem("student");
+    if (token && student) {
       setIsAuthenticated(true);
+      const studentData = JSON.parse(student);
+      setUserRole(studentData.role || "student");
     }
   }, []);
 
@@ -42,10 +47,13 @@ export default function App() {
   const handleLoginSuccess = (token: string, student: any) => {
     setIsAuthenticated(true);
     setShowRegister(false);
+    setUserRole(student.role || "student");
   };
 
   const handleRegisterSuccess = (token: string, student: any) => {
     setIsAuthenticated(true);
+    setShowRegister(false);
+    setUserRole(student.role || "student");
     setShowRegister(false);
   };
 
@@ -75,6 +83,14 @@ export default function App() {
   }
 
   const renderContent = () => {
+    // Show Teacher Dashboard for teacher role
+    if (userRole === "teacher") {
+      if (activeSection === "dashboard") {
+        return <TeacherDashboard />;
+      }
+      // Teachers can also view other pages
+    }
+
     switch (activeSection) {
       case "dashboard":
         return <Dashboard />;
