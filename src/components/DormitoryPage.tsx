@@ -2,8 +2,45 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Home, MapPin, Users, Wifi, Utensils, CheckCircle, XCircle, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
 
 export function DormitoryPage() {
+  const [applying, setApplying] = useState<number | null>(null);
+
+  const handleApply = async (dormId: number, dormName: string) => {
+    setApplying(dormId);
+    const token = localStorage.getItem("authToken");
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/dormitory/apply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          dormitory_id: dormId,
+          room_type: "Double Room",
+        }),
+      });
+
+      if (response.ok) {
+        alert(`Application for ${dormName} submitted successfully!`);
+        window.location.reload();
+      } else {
+        const error = await response.json();
+        alert(error.detail || "Failed to apply");
+      }
+    } catch (error) {
+      console.error("Application error:", error);
+      alert("Failed to submit application");
+    } finally {
+      setApplying(null);
+    }
+  };
+
   const currentApplication = {
     dormitory: "Jedlíkova Dormitory",
     room: "B-312",
@@ -181,9 +218,10 @@ export function DormitoryPage() {
                     <Button 
                       className="w-full"
                       variant={dorm.available ? "default" : "secondary"}
-                      disabled={!dorm.available}
+                      disabled={!dorm.available || applying === dorm.id}
+                      onClick={() => dorm.available && handleApply(dorm.id, dorm.name)}
                     >
-                      {dorm.available ? "Apply Now" : "Not Available"}
+                      {applying === dorm.id ? "Applying..." : dorm.available ? "Apply Now" : "Not Available"}
                     </Button>
                   </div>
                 </div>

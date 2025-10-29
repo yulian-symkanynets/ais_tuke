@@ -23,14 +23,49 @@ export function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [enrolling, setEnrolling] = useState<string | null>(null);
 
   useEffect(() => {
+    loadSubjects();
+  }, []);
+
+  const loadSubjects = () => {
     fetch(`${API_BASE}/api/subjects`)
       .then(res => res.json())
       .then(data => setSubjects(data))
       .catch(err => console.error("Failed to load subjects:", err))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  const handleEnroll = async (subjectCode: string) => {
+    setEnrolling(subjectCode);
+    const token = localStorage.getItem("authToken");
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/enrolment/enroll`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ subject_code: subjectCode }),
+      });
+
+      if (response.ok) {
+        // Reload subjects to update enrollment status
+        loadSubjects();
+        alert("Successfully enrolled in subject!");
+      } else {
+        const error = await response.json();
+        alert(error.detail || "Failed to enroll");
+      }
+    } catch (error) {
+      console.error("Enrollment error:", error);
+      alert("Failed to enroll in subject");
+    } finally {
+      setEnrolling(null);
+    }
+  };
 
   const filteredSubjects = subjects.filter(subject =>
     subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -97,9 +132,10 @@ export function SubjectsPage() {
                   <Button 
                     className="w-full mt-2"
                     variant={subject.enrolled ? "secondary" : "default"}
-                    disabled={subject.enrolled}
+                    disabled={subject.enrolled || enrolling === subject.code}
+                    onClick={() => !subject.enrolled && handleEnroll(subject.code)}
                   >
-                    {subject.enrolled ? "Enrolled" : "Enroll"}
+                    {enrolling === subject.code ? "Enrolling..." : subject.enrolled ? "Enrolled" : "Enroll"}
                   </Button>
                 </div>
               </CardContent>
