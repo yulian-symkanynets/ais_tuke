@@ -9,89 +9,175 @@ import {
   TableRow,
 } from "./ui/table";
 import { TrendingUp, Award } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+// --- Types ---
+type Grade = {
+  id: number;
+  subject: string;
+  code: string;
+  grade: string; // A, B, C, D, E, FX
+  credits: number;
+  semester: string;
+  date: string; // e.g. "Jun 15, 2025"
+  numericGrade: number; // 1.0 best ... 5.0 fail
+};
+
+// Helpers
+function weightedGPA(items: Grade[]): number | null {
+  if (!items.length) return null;
+  const totalCredits = items.reduce((s, g) => s + g.credits, 0);
+  if (!totalCredits) return null;
+  const sum = items.reduce((s, g) => s + g.numericGrade * g.credits, 0);
+  return +(sum / totalCredits).toFixed(2);
+}
+
+function fmtNumber(n: number | null | undefined) {
+  return n == null || Number.isNaN(n) ? "—" : n.toFixed(2);
+}
+
+const API_BASE = "http://127.0.0.1:8000"; // adjust if needed
 
 export function GradesPage() {
-  const grades = [
-    {
-      subject: "Data Structures and Algorithms",
-      code: "ZADS",
-      grade: "A",
-      credits: 6,
-      semester: "Winter 2025/26",
-      date: "Oct 5, 2025",
-      numericGrade: 1.0,
-    },
-    {
-      subject: "Web Technologies",
-      code: "WEBTECH",
-      grade: "B",
-      credits: 5,
-      semester: "Winter 2025/26",
-      date: "Oct 3, 2025",
-      numericGrade: 1.5,
-    },
-    {
-      subject: "Operating Systems",
-      code: "OS",
-      grade: "A",
-      credits: 6,
-      semester: "Summer 2024/25",
-      date: "Jun 15, 2025",
-      numericGrade: 1.0,
-    },
-    {
-      subject: "Computer Networks",
-      code: "CN",
-      grade: "B",
-      credits: 5,
-      semester: "Summer 2024/25",
-      date: "Jun 12, 2025",
-      numericGrade: 2.0,
-    },
-    {
-      subject: "Programming in Java",
-      code: "JAVA",
-      grade: "A",
-      credits: 6,
-      semester: "Winter 2024/25",
-      date: "Jan 20, 2025",
-      numericGrade: 1.0,
-    },
-    {
-      subject: "Mathematics II",
-      code: "MATH2",
-      grade: "C",
-      credits: 6,
-      semester: "Winter 2024/25",
-      date: "Jan 18, 2025",
-      numericGrade: 2.5,
-    },
-  ];
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [semesters, setSemesters] = useState<string[]>([]);
 
-  const getGradeBadgeVariant = (grade: string) => {
+  // Controls for random generation
+  const [count, setCount] = useState(12);
+  const [seed, setSeed] = useState<string>("");
+  const [onlySemester, setOnlySemester] = useState(false);
+  const [currentSemester, setCurrentSemester] = useState<string>("Winter 2025/26");
+
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Fetch semesters on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/semesters`)
+      .then((r) => r.json())
+      .then((data) => {
+        const list: string[] = data?.semesters ?? [];
+        setSemesters(list);
+        // Prefer a Winter semester if present, fallback to first
+        const preferred = list.find((s) => /Winter/.test(s)) ?? list[0] ?? "Winter 2025/26";
+        setCurrentSemester(preferred);
+      })
+      .catch(() => {
+        // non-fatal for the page, keep default currentSemester
+      });
+  }, []);
+
+  // Fetch grades
+  const fetchGrades = () => {
+    setLoading(true);
+    setError(null);
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    const params = new URLSearchParams();
+    params.set("count", String(count));
+    if (seed.trim()) params.set("seed", seed.trim());
+    if (onlySemester && currentSemester) params.set("semester", currentSemester);
+
+    fetch(`${API_BASE}/api/grades?${params.toString()}` , { signal: ac.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        return r.json();
+      })
+      .then((data: Grade[]) => setGrades(data))
+      .catch((e) => setError(e.message || "Failed to load grades"))
+      .finally(() => setLoading(false));
+  };
+
+  // initial load
+  useEffect(() => {
+    fetchGrades();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // recompute stats
+  const overallGPA = useMemo(() => weightedGPA(grades), [grades]);
+  const totalCredits = useMemo(() => grades.reduce((s, g) => s + g.credits, 0), [grades]);
+  const currentSemesterGrades = useMemo(
+    () => grades.filter((g) => g.semester === currentSemester),
+    [grades, currentSemester]
+  );
+  const currentGPA = useMemo(() => weightedGPA(currentSemesterGrades), [currentSemesterGrades]);
+
+  const getGradeBadgeVariant = (grade: string): "default" | "secondary" | "outline" => {
     if (grade === "A") return "default";
     if (grade === "B") return "secondary";
     return "outline";
   };
 
-  const currentSemesterGrades = grades.filter(g => g.semester === "Winter 2025/26");
-  const currentGPA = (
-    currentSemesterGrades.reduce((sum, g) => sum + g.numericGrade, 0) /
-    currentSemesterGrades.length
-  ).toFixed(2);
-  
-  const totalCredits = grades.reduce((sum, g) => sum + g.credits, 0);
-  const overallGPA = (
-    grades.reduce((sum, g) => sum + g.numericGrade, 0) / grades.length
-  ).toFixed(2);
-
   return (
     <div className="space-y-6">
       <div>
         <h1>Grades</h1>
-        <p className="text-muted-foreground">
-          View your academic performance and grades
-        </p>
+        <p className="text-muted-foreground">View your academic performance and grades</p>
+      </div>
+
+      {/* Controls */}
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="text-sm text-muted-foreground">Records</label>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+              className="mt-1 w-full rounded-md border px-3 py-2"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-sm text-muted-foreground">Seed (optional)</label>
+            <input
+              value={seed}
+              onChange={(e) => setSeed(e.target.value)}
+              placeholder="e.g. 42"
+              className="mt-1 w-full rounded-md border px-3 py-2"
+            />
+          </div>
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="text-sm text-muted-foreground">Current semester</label>
+            <select
+              value={currentSemester}
+              onChange={(e) => setCurrentSemester(e.target.value)}
+              className="mt-1 w-full rounded-md border px-3 py-2"
+            >
+              {(semesters.length ? semesters : [currentSemester]).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm mt-6">
+            <input
+              id="only-sem"
+              type="checkbox"
+              checked={onlySemester}
+              onChange={(e) => setOnlySemester(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Generate only this semester
+          </label>
+        </div>
+        <div className="flex items-end gap-3">
+          <button
+            onClick={fetchGrades}
+            className="inline-flex items-center justify-center rounded-xl border px-4 py-2 shadow-sm hover:bg-accent/10"
+            disabled={loading}
+          >
+            {loading ? "Loading…" : "Refresh"}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -101,10 +187,8 @@ export function GradesPage() {
             <TrendingUp className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl">{overallGPA}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Based on {grades.length} subjects
-            </p>
+            <div className="text-3xl">{fmtNumber(overallGPA ?? null)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Based on {grades.length} subjects</p>
           </CardContent>
         </Card>
 
@@ -114,10 +198,8 @@ export function GradesPage() {
             <Award className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl">{currentGPA}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Winter 2025/26
-            </p>
+            <div className="text-3xl">{fmtNumber(currentGPA ?? null)}</div>
+            <p className="text-xs text-muted-foreground mt-1">{currentSemester}</p>
           </CardContent>
         </Card>
 
@@ -128,9 +210,7 @@ export function GradesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl">{totalCredits}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              ECTS credits earned
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">ECTS credits earned</p>
           </CardContent>
         </Card>
       </div>
@@ -140,7 +220,12 @@ export function GradesPage() {
           <CardTitle>Grade History</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border">
+          {error && (
+            <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm">
+              Failed to load grades: {error}
+            </div>
+          )}
+          <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -153,31 +238,45 @@ export function GradesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {grades.map((grade, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{grade.subject}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{grade.code}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {grade.semester}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {grade.credits}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge 
-                        variant={getGradeBadgeVariant(grade.grade)}
-                        className="min-w-[40px] justify-center"
-                      >
-                        {grade.grade}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {grade.date}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {loading
+                  ? Array.from({ length: 6 }).map((_, i) => (
+                      <TableRow key={`sk-${i}`}>
+                        <TableCell>
+                          <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="h-6 w-14 animate-pulse rounded bg-muted" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="mx-auto h-4 w-8 animate-pulse rounded bg-muted" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="mx-auto h-6 w-12 animate-pulse rounded bg-muted" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="h-4 w-28 animate-pulse rounded bg-muted" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  : grades.map((grade) => (
+                      <TableRow key={grade.id}>
+                        <TableCell>{grade.subject}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{grade.code}</Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{grade.semester}</TableCell>
+                        <TableCell className="text-center">{grade.credits}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={getGradeBadgeVariant(grade.grade)} className="min-w-[40px] justify-center">
+                            {grade.grade}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{grade.date}</TableCell>
+                      </TableRow>
+                    ))}
               </TableBody>
             </Table>
           </div>
