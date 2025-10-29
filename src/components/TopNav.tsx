@@ -1,4 +1,4 @@
-import { Bell, Moon, Sun, ChevronDown, Menu } from "lucide-react";
+import { Bell, Moon, Sun, ChevronDown, Menu, LogOut } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
@@ -17,6 +17,7 @@ interface TopNavProps {
   onToggleDarkMode: () => void;
   language: string;
   onToggleLanguage: () => void;
+  onLogout?: () => void;
 }
 
 export function TopNav({ 
@@ -24,7 +25,8 @@ export function TopNav({
   darkMode, 
   onToggleDarkMode,
   language,
-  onToggleLanguage 
+  onToggleLanguage,
+  onLogout 
 }: TopNavProps) {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card shadow-sm">
@@ -105,7 +107,12 @@ export function TopNav({
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Log out</DropdownMenuItem>
+              {onLogout && (
+                <DropdownMenuItem onClick={onLogout} className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

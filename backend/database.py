@@ -24,11 +24,23 @@ def init_database():
             id INTEGER PRIMARY KEY,
             first_name VARCHAR,
             last_name VARCHAR,
-            email VARCHAR,
-            student_id VARCHAR,
+            email VARCHAR UNIQUE,
+            student_id VARCHAR UNIQUE,
             year INTEGER,
             program VARCHAR,
-            gpa DOUBLE
+            gpa DOUBLE,
+            password_hash VARCHAR
+        )
+    """)
+    
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY,
+            student_id INTEGER,
+            token VARCHAR UNIQUE,
+            created_at TIMESTAMP,
+            expires_at TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES students(id)
         )
     """)
     
@@ -245,11 +257,14 @@ def seed_data(conn):
     """Seed initial data"""
     rng = random.Random(42)
     
-    # Insert student
+    # Insert student with hashed password (password: "password123")
+    # In production, use proper password hashing like bcrypt
+    import hashlib
+    password_hash = hashlib.sha256("password123".encode()).hexdigest()
     conn.execute("""
         INSERT INTO students VALUES (1, 'Yulian', 'Symkanynets', 'yulian@student.tuke.sk', 
-                                    'ST12345', 3, 'Computer Science', 3.45)
-    """)
+                                    'ST12345', 3, 'Computer Science', 3.45, ?)
+    """, [password_hash])
     
     # Insert subjects
     subjects_data = [

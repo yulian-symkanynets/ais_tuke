@@ -2,13 +2,34 @@
 AIS TUKE Student Portal - Backend API with DuckDB
 """
 from typing import List, Optional, Dict
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from database import get_connection, init_database
+import hashlib
+import secrets
+from datetime import datetime, timedelta
 
 # Initialize database on startup
 init_database()
+
+# ====== AUTH MODELS ======
+class RegisterRequest(BaseModel):
+    firstName: str
+    lastName: str
+    email: EmailStr
+    studentId: str
+    password: str
+    program: str = "Computer Science"
+    year: int = 1
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class AuthResponse(BaseModel):
+    token: str
+    student: Dict
 
 # ====== MODELS ======
 class Grade(BaseModel):
@@ -177,6 +198,162 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ====== HELPER FUNCTIONS ======
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def create_session_token() -> str:
+    return secrets.token_urlsafe(32)
+
+def verify_token(token: Optional[str]) -> Optional[int]:
+    """Verify session token and return student_id if valid"""
+    if not token:
+        return None
+    
+    conn = get_connection()
+    result = conn.execute("""
+        SELECT student_id FROM sessions 
+        WHERE token = ? AND expires_at > datetime('now')
+    """, [token]).fetchone()
+    conn.close()
+    
+    return result[0] if result else None
+
+# ====== AUTH ENDPOINTS ======
+@app.post("/api/auth/register", response_model=AuthResponse, tags=["auth"])
+def register(req: RegisterRequest):
+    conn = get_connection()
+    
+    # Check if email or student_id already exists
+    existing = conn.execute("""
+        SELECT id FROM students WHERE email = ? OR student_id = ?
+    """, [req.email, req.studentId]).fetchone()
+    
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email or Student ID already registered")
+    
+    # Get next ID
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM students").fetchone()[0]
+    new_id = max_id + 1
+    
+    # Hash password and create student
+    password_hash = hash_password(req.password)
+    conn.execute("""
+        INSERT INTO students (id, first_name, last_name, email, student_id, year, program, gpa, password_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, ?)
+    """, [new_id, req.firstName, req.lastName, req.email, req.studentId, req.year, req.program, password_hash])
+    
+    # Create session token
+    token = create_session_token()
+    expires_at = datetime.now() + timedelta(days=7)
+    conn.execute("""
+        INSERT INTO sessions (student_id, token, created_at, expires_at)
+        VALUES (?, ?, datetime('now'), ?)
+    """, [new_id, token, expires_at.isoformat()])
+    
+    conn.close()
+    
+    return AuthResponse(
+        token=token,
+        student={
+            "id": new_id,
+            "firstName": req.firstName,
+            "lastName": req.lastName,
+            "email": req.email,
+            "studentId": req.studentId,
+            "year": req.year,
+            "program": req.program,
+            "gpa": 0.0
+        }
+    )
+
+@app.post("/api/auth/login", response_model=AuthResponse, tags=["auth"])
+def login(req: LoginRequest):
+    conn = get_connection()
+    
+    # Find student
+    password_hash = hash_password(req.password)
+    result = conn.execute("""
+        SELECT id, first_name, last_name, email, student_id, year, program, gpa
+        FROM students
+        WHERE email = ? AND password_hash = ?
+    """, [req.email, password_hash]).fetchone()
+    
+    if not result:
+        conn.close()
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    student_id = result[0]
+    
+    # Create session token
+    token = create_session_token()
+    expires_at = datetime.now() + timedelta(days=7)
+    conn.execute("""
+        INSERT INTO sessions (student_id, token, created_at, expires_at)
+        VALUES (?, ?, datetime('now'), ?)
+    """, [student_id, token, expires_at.isoformat()])
+    
+    conn.close()
+    
+    return AuthResponse(
+        token=token,
+        student={
+            "id": result[0],
+            "firstName": result[1],
+            "lastName": result[2],
+            "email": result[3],
+            "studentId": result[4],
+            "year": result[5],
+            "program": result[6],
+            "gpa": result[7]
+        }
+    )
+
+@app.post("/api/auth/logout", tags=["auth"])
+def logout(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    conn = get_connection()
+    conn.execute("DELETE FROM sessions WHERE token = ?", [token])
+    conn.close()
+    
+    return {"message": "Logged out successfully"}
+
+@app.get("/api/auth/me", tags=["auth"])
+def get_current_user(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    conn = get_connection()
+    result = conn.execute("""
+        SELECT id, first_name, last_name, email, student_id, year, program, gpa
+        FROM students WHERE id = ?
+    """, [student_id]).fetchone()
+    conn.close()
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    return {
+        "id": result[0],
+        "firstName": result[1],
+        "lastName": result[2],
+        "email": result[3],
+        "studentId": result[4],
+        "year": result[5],
+        "program": result[6],
+        "gpa": result[7]
+    }
 
 # ====== HEALTH & META ENDPOINTS ======
 @app.get("/health", tags=["meta"])
