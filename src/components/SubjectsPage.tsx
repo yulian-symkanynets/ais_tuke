@@ -3,70 +3,39 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Search, BookOpen, Users, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+type Subject = {
+  id: number;
+  code: string;
+  name: string;
+  credits: number;
+  semester: string;
+  enrolled: boolean;
+  students: number;
+  lecturer: string;
+  schedule: string;
+};
 
 export function SubjectsPage() {
-  const subjects = [
-    {
-      code: "ZADS",
-      name: "Data Structures and Algorithms",
-      credits: 6,
-      semester: "Winter",
-      enrolled: true,
-      students: 145,
-      lecturer: "Prof. John Smith",
-      schedule: "Mon, Wed 08:00-09:40",
-    },
-    {
-      code: "WEBTECH",
-      name: "Web Technologies",
-      credits: 5,
-      semester: "Winter",
-      enrolled: true,
-      students: 132,
-      lecturer: "Dr. Anna Johnson",
-      schedule: "Mon, Thu 10:00-11:40",
-    },
-    {
-      code: "DBS",
-      name: "Database Systems",
-      credits: 6,
-      semester: "Winter",
-      enrolled: true,
-      students: 128,
-      lecturer: "Prof. Michael Brown",
-      schedule: "Tue 13:00-14:40",
-    },
-    {
-      code: "SE",
-      name: "Software Engineering",
-      credits: 6,
-      semester: "Winter",
-      enrolled: true,
-      students: 156,
-      lecturer: "Dr. Sarah Wilson",
-      schedule: "Wed 08:00-09:40",
-    },
-    {
-      code: "AI",
-      name: "Artificial Intelligence",
-      credits: 6,
-      semester: "Winter",
-      enrolled: false,
-      students: 98,
-      lecturer: "Prof. David Lee",
-      schedule: "Fri 10:00-11:40",
-    },
-    {
-      code: "MOBILE",
-      name: "Mobile Application Development",
-      credits: 5,
-      semester: "Winter",
-      enrolled: false,
-      students: 87,
-      lecturer: "Dr. Emily Davis",
-      schedule: "Thu 13:00-14:40",
-    },
-  ];
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/subjects`)
+      .then(res => res.json())
+      .then(data => setSubjects(data))
+      .catch(err => console.error("Failed to load subjects:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredSubjects = subjects.filter(subject =>
+    subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    subject.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -83,6 +52,8 @@ export function SubjectsPage() {
           <Input
             placeholder="Search subjects..."
             className="pl-10"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <Badge variant="secondary" className="px-4 py-2">
@@ -90,48 +61,52 @@ export function SubjectsPage() {
         </Badge>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {subjects.map((subject) => (
-          <Card key={subject.code} className="shadow-md border-0 hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline">{subject.code}</Badge>
-                    <Badge className="bg-accent text-accent-foreground">
-                      {subject.credits} ECTS
-                    </Badge>
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground">Loading subjects...</div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {filteredSubjects.map((subject) => (
+            <Card key={subject.code} className="shadow-md border-0 hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline">{subject.code}</Badge>
+                      <Badge className="bg-accent text-accent-foreground">
+                        {subject.credits} ECTS
+                      </Badge>
+                    </div>
+                    <CardTitle className="text-lg">{subject.name}</CardTitle>
+                    <CardDescription className="mt-1">
+                      {subject.lecturer}
+                    </CardDescription>
                   </div>
-                  <CardTitle className="text-lg">{subject.name}</CardTitle>
-                  <CardDescription className="mt-1">
-                    {subject.lecturer}
-                  </CardDescription>
+                  <BookOpen className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <BookOpen className="h-5 w-5 text-muted-foreground" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4" />
-                  {subject.schedule}
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    {subject.schedule}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Users className="h-4 w-4" />
+                    {subject.students} students
+                  </div>
+                  <Button 
+                    className="w-full mt-2"
+                    variant={subject.enrolled ? "secondary" : "default"}
+                    disabled={subject.enrolled}
+                  >
+                    {subject.enrolled ? "Enrolled" : "Enroll"}
+                  </Button>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="h-4 w-4" />
-                  {subject.students} students
-                </div>
-                <Button 
-                  className="w-full mt-2"
-                  variant={subject.enrolled ? "secondary" : "default"}
-                  disabled={subject.enrolled}
-                >
-                  {subject.enrolled ? "Enrolled" : "Enroll"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

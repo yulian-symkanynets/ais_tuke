@@ -10,82 +10,69 @@ import {
   BookOpen,
   GraduationCap
 } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+type Notification = {
+  id: number;
+  type: string;
+  message: string;
+  time: string;
+  read: boolean;
+};
 
 export function NotificationsPage() {
-  const notifications = [
-    {
-      id: 1,
-      type: "grade",
-      title: "New Grade Added",
-      message: "Your grade for Data Structures has been published: A (1.0)",
-      date: "2 hours ago",
-      read: false,
-      icon: GraduationCap,
-    },
-    {
-      id: 2,
-      type: "enrolment",
-      title: "Enrolment Confirmed",
-      message: "Your enrolment for Web Technologies has been confirmed",
-      date: "1 day ago",
-      read: false,
-      icon: CheckCircle2,
-    },
-    {
-      id: 3,
-      type: "schedule",
-      title: "Schedule Change",
-      message: "Database Systems class moved to room PK6 C208",
-      date: "2 days ago",
-      read: true,
-      icon: Calendar,
-    },
-    {
-      id: 4,
-      type: "info",
-      title: "Exam Registration Open",
-      message: "Registration for final exams is now open until October 20",
-      date: "3 days ago",
-      read: true,
-      icon: Info,
-    },
-    {
-      id: 5,
-      type: "deadline",
-      title: "Assignment Deadline",
-      message: "Software Engineering project submission due in 5 days",
-      date: "4 days ago",
-      read: true,
-      icon: AlertCircle,
-    },
-    {
-      id: 6,
-      type: "material",
-      title: "New Study Material",
-      message: "New lecture notes available for Database Systems",
-      date: "5 days ago",
-      read: true,
-      icon: BookOpen,
-    },
-    {
-      id: 7,
-      type: "grade",
-      title: "Grade Updated",
-      message: "Your grade for Web Technologies has been updated: B (1.5)",
-      date: "1 week ago",
-      read: true,
-      icon: GraduationCap,
-    },
-    {
-      id: 8,
-      type: "info",
-      title: "System Maintenance",
-      message: "AIS TUKE will be unavailable on Saturday from 2:00 AM to 6:00 AM",
-      date: "1 week ago",
-      read: true,
-      icon: Info,
-    },
-  ];
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/notifications`)
+      .then(res => res.json())
+      .then(data => setNotifications(data))
+      .catch(err => console.error("Failed to load notifications:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case "grade": return GraduationCap;
+      case "enrolment": return CheckCircle2;
+      case "schedule": return Calendar;
+      case "deadline": return AlertCircle;
+      case "material": return BookOpen;
+      default: return Info;
+    }
+  };
+
+  const getTitle = (type: string) => {
+    switch (type) {
+      case "grade": return "Grade Notification";
+      case "enrolment": return "Enrolment Update";
+      case "info": return "Information";
+      default: return "Notification";
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1>Notifications</h1>
+          <p className="text-muted-foreground">Loading notifications...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  const notificationsWithIcons = notifications.map(notif => ({
+    ...notif,
+    title: getTitle(notif.type),
+    date: notif.time,
+    icon: getIcon(notif.type),
+  }));
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -103,8 +90,6 @@ export function NotificationsPage() {
         return "text-gray-500";
     }
   };
-
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="space-y-6">
@@ -126,7 +111,7 @@ export function NotificationsPage() {
       </div>
 
       <div className="grid gap-4">
-        {notifications.map((notification) => {
+        {notificationsWithIcons.map((notification) => {
           const Icon = notification.icon;
           return (
             <Card 

@@ -3,59 +3,46 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+type EnrolmentPeriod = {
+  id: number;
+  name: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+};
+
+type EnrolledSubject = {
+  id: number;
+  code: string;
+  name: string;
+  credits: number;
+  status: string;
+  enrolledDate: string;
+};
 
 export function EnrolmentPage() {
-  const enrolmentPeriods = [
-    {
-      name: "Main Enrolment Period",
-      status: "closed",
-      startDate: "Sep 1, 2025",
-      endDate: "Sep 15, 2025",
-    },
-    {
-      name: "Late Enrolment",
-      status: "active",
-      startDate: "Sep 16, 2025",
-      endDate: "Oct 15, 2025",
-    },
-    {
-      name: "Subject Withdrawal Period",
-      status: "upcoming",
-      startDate: "Nov 1, 2025",
-      endDate: "Nov 30, 2025",
-    },
-  ];
+  const [enrolmentPeriods, setEnrolmentPeriods] = useState<EnrolmentPeriod[]>([]);
+  const [enrolledSubjects, setEnrolledSubjects] = useState<EnrolledSubject[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const enrolledSubjects = [
-    {
-      code: "ZADS",
-      name: "Data Structures and Algorithms",
-      credits: 6,
-      status: "confirmed",
-      enrolledDate: "Sep 14, 2025",
-    },
-    {
-      code: "WEBTECH",
-      name: "Web Technologies",
-      credits: 5,
-      status: "confirmed",
-      enrolledDate: "Sep 14, 2025",
-    },
-    {
-      code: "DBS",
-      name: "Database Systems",
-      credits: 6,
-      status: "confirmed",
-      enrolledDate: "Sep 14, 2025",
-    },
-    {
-      code: "SE",
-      name: "Software Engineering",
-      credits: 6,
-      status: "confirmed",
-      enrolledDate: "Sep 14, 2025",
-    },
-  ];
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_BASE}/api/enrolment/periods`).then(res => res.json()),
+      fetch(`${API_BASE}/api/enrolment/subjects`).then(res => res.json()),
+    ])
+      .then(([periods, subjects]) => {
+        setEnrolmentPeriods(periods);
+        setEnrolledSubjects(subjects);
+      })
+      .catch(err => console.error("Failed to load enrolment data:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalCredits = enrolledSubjects.reduce((sum, s) => sum + s.credits, 0);
 
   const getStatusIcon = (status: string) => {
     if (status === "active") return <Clock className="h-4 w-4" />;
@@ -69,6 +56,17 @@ export function EnrolmentPage() {
     return "bg-blue-500 text-white";
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1>Enrolment</h1>
+          <p className="text-muted-foreground">Loading enrolment data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -81,7 +79,7 @@ export function EnrolmentPage() {
       <Alert className="bg-accent/10 border-accent">
         <CheckCircle2 className="h-4 w-4 text-accent" />
         <AlertDescription>
-          You are currently enrolled in <strong>4 subjects</strong> for a total of <strong>23 ECTS credits</strong>.
+          You are currently enrolled in <strong>{enrolledSubjects.length} subjects</strong> for a total of <strong>{totalCredits} ECTS credits</strong>.
         </AlertDescription>
       </Alert>
 

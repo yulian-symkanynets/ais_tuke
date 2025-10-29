@@ -28,7 +28,7 @@ pip install -q -r requirements.txt
 # Initialize database if it doesn't exist
 if [ ! -f "ais_tuke.db" ]; then
     echo "🗄️  Initializing database..."
-    python database.py
+    python3 database.py
 fi
 
 # Start the server
@@ -36,4 +36,4 @@ echo ""
 echo "✅ Starting server on http://127.0.0.1:8000"
 echo "📚 API Documentation: http://127.0.0.1:8000/docs"
 echo ""
-python main.py
+python3 main.py
