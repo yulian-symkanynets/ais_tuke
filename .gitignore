@@ -1,1 +1,5 @@
 /node_modules/
+/backend/ais_tuke.db
+/backend/__pycache__/
+*.pyc
+.DS_Store
