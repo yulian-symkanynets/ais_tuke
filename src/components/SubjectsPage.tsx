@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { BookOpen, Users, Clock, GraduationCap, Filter } from "lucide-react";
+import { BookOpen, Users, Clock, GraduationCap, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -22,6 +22,20 @@ type Subject = {
   year?: number;
 };
 
+type TimeOption = {
+  id: number;
+  subject_code: string;
+  option_name: string;
+  day: string;
+  time: string;
+  room: string;
+  type: string;
+  lecturer: string;
+  capacity: number;
+  enrolled: number;
+  available: number;
+};
+
 export function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +44,9 @@ export function SubjectsPage() {
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [semesterFilter, setSemesterFilter] = useState<string>("all");
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
+  const [showTimeOptions, setShowTimeOptions] = useState<string | null>(null);
+  const [timeOptions, setTimeOptions] = useState<Record<string, TimeOption[]>>({});
+  const [selectedTimeOptions, setSelectedTimeOptions] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     loadSubjects();
@@ -58,9 +75,59 @@ export function SubjectsPage() {
       .finally(() => setLoading(false));
   };
 
+  const loadTimeOptions = async (subjectCode: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/schedule/options/${subjectCode}`);
+      const data = await response.json();
+      setTimeOptions(prev => ({ ...prev, [subjectCode]: data }));
+      
+      // Pre-select one lecture and one lab option by default
+      const lectureOption = data.find((opt: TimeOption) => opt.type === 'Lecture');
+      const labOption = data.find((opt: TimeOption) => opt.type === 'Lab');
+      const defaultSelections = [];
+      if (lectureOption) defaultSelections.push(lectureOption.id);
+      if (labOption) defaultSelections.push(labOption.id);
+      setSelectedTimeOptions(prev => ({ ...prev, [subjectCode]: defaultSelections }));
+    } catch (error) {
+      console.error("Failed to load time options:", error);
+    }
+  };
+
+  const toggleTimeOptions = (subjectCode: string) => {
+    if (showTimeOptions === subjectCode) {
+      setShowTimeOptions(null);
+    } else {
+      setShowTimeOptions(subjectCode);
+      if (!timeOptions[subjectCode]) {
+        loadTimeOptions(subjectCode);
+      }
+    }
+  };
+
+  const toggleTimeOptionSelection = (subjectCode: string, optionId: number, type: string) => {
+    setSelectedTimeOptions(prev => {
+      const current = prev[subjectCode] || [];
+      const options = timeOptions[subjectCode] || [];
+      
+      // Remove any existing selection of the same type (only one lecture and one lab)
+      const filtered = current.filter(id => {
+        const opt = options.find(o => o.id === id);
+        return opt && opt.type !== type;
+      });
+      
+      // Toggle the selected option
+      if (current.includes(optionId)) {
+        return { ...prev, [subjectCode]: filtered };
+      } else {
+        return { ...prev, [subjectCode]: [...filtered, optionId] };
+      }
+    });
+  };
+
   const handleEnroll = async (subjectCode: string) => {
     setEnrolling(subjectCode);
     const token = localStorage.getItem("authToken");
+    const selections = selectedTimeOptions[subjectCode] || [];
     
     try {
       const response = await fetch(`${API_BASE}/api/enrolment/enroll`, {
@@ -69,12 +136,16 @@ export function SubjectsPage() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify({ subject_code: subjectCode }),
+        body: JSON.stringify({ 
+          subject_code: subjectCode,
+          time_option_ids: selections.length > 0 ? selections : undefined
+        }),
       });
 
       if (response.ok) {
         // Reload subjects to update enrollment status
         loadSubjects();
+        setShowTimeOptions(null);
         alert("Successfully enrolled in subject!");
       } else {
         const error = await response.json();
@@ -210,6 +281,83 @@ export function SubjectsPage() {
                         )}
                       </div>
                     </>
+                  )}
+
+                  {!subject.enrolled && (
+                    <div className="pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mb-2"
+                        onClick={() => toggleTimeOptions(subject.code)}
+                      >
+                        {showTimeOptions === subject.code ? (
+                          <>
+                            <ChevronUp className="h-4 w-4 mr-2" />
+                            Hide Time Options
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4 mr-2" />
+                            Select Schedule
+                          </>
+                        )}
+                      </Button>
+
+                      {showTimeOptions === subject.code && timeOptions[subject.code] && (
+                        <div className="space-y-3 mb-3">
+                          <p className="text-sm font-medium">Choose your class times:</p>
+                          
+                          {/* Group by type */}
+                          {['Lecture', 'Lab'].map(type => {
+                            const options = timeOptions[subject.code].filter(opt => opt.type === type);
+                            if (options.length === 0) return null;
+                            
+                            return (
+                              <div key={type} className="space-y-2">
+                                <p className="text-xs font-semibold text-muted-foreground">{type}:</p>
+                                {options.map(option => {
+                                  const isSelected = (selectedTimeOptions[subject.code] || []).includes(option.id);
+                                  const isFull = option.available <= 0;
+                                  
+                                  return (
+                                    <button
+                                      key={option.id}
+                                      onClick={() => !isFull && toggleTimeOptionSelection(subject.code, option.id, type)}
+                                      disabled={isFull}
+                                      className={`w-full text-left p-2 rounded border text-xs transition-colors ${
+                                        isSelected
+                                          ? 'bg-primary text-primary-foreground border-primary'
+                                          : isFull
+                                          ? 'bg-muted text-muted-foreground border-muted cursor-not-allowed'
+                                          : 'hover:bg-accent border-border'
+                                      }`}
+                                    >
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <div className="font-medium">{option.option_name}</div>
+                                          <div className="text-xs opacity-80">
+                                            {option.day} {option.time} • {option.room}
+                                          </div>
+                                          <div className="text-xs opacity-80">{option.lecturer}</div>
+                                        </div>
+                                        <div className="text-xs">
+                                          {isFull ? (
+                                            <Badge variant="destructive" className="text-xs">Full</Badge>
+                                          ) : (
+                                            <span className="opacity-70">{option.available} left</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   <Button 

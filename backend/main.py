@@ -33,10 +33,19 @@ class AuthResponse(BaseModel):
 
 class EnrollRequest(BaseModel):
     subject_code: str
+    time_option_ids: Optional[List[int]] = None  # Optional time slot selections
 
 class DormitoryApplyRequest(BaseModel):
     dormitory_id: int
     room_type: str
+
+class EnrollWithTimeRequest(BaseModel):
+    subject_code: str
+    time_option_ids: List[int]  # List of selected time option IDs (lecture + lab)
+
+class ScheduleSelectionRequest(BaseModel):
+    subject_code: str
+    time_option_ids: List[int]
 
 # ====== MODELS ======
 class Grade(BaseModel):
@@ -70,6 +79,19 @@ class ScheduleItem(BaseModel):
     code: str
     room: str
     type: str
+
+class SubjectTimeOption(BaseModel):
+    id: int
+    subject_code: str
+    option_name: str
+    day: str
+    time: str
+    room: str
+    type: str
+    lecturer: str
+    capacity: int
+    enrolled: int
+    available: int
 
 class EnrolmentPeriod(BaseModel):
     id: int
@@ -512,21 +534,35 @@ def list_subjects(
 
 # ====== SCHEDULE ENDPOINTS ======
 @app.get("/api/schedule", response_model=List[ScheduleItem], tags=["schedule"])
-def list_schedule():
+def list_schedule(authorization: Optional[str] = Header(None)):
+    """Get student's personalized schedule based on their time slot selections"""
+    student_id = get_student_from_token(authorization)
+    
     conn = get_connection()
+    # Get schedule based on student's selected time options
     result = conn.execute("""
-        SELECT id, day, time, subject, code, room, type
-        FROM schedule
+        SELECT DISTINCT
+            sto.id,
+            sto.day,
+            sto.time,
+            s.name as subject,
+            s.code,
+            sto.room,
+            sto.type
+        FROM student_schedule_selections sss
+        JOIN subject_time_options sto ON sss.time_option_id = sto.id
+        JOIN subjects s ON s.code = sto.subject_code
+        WHERE sss.student_id = ?
         ORDER BY 
-            CASE day
+            CASE sto.day
                 WHEN 'Monday' THEN 1
                 WHEN 'Tuesday' THEN 2
                 WHEN 'Wednesday' THEN 3
                 WHEN 'Thursday' THEN 4
                 WHEN 'Friday' THEN 5
             END,
-            time
-    """).fetchall()
+            sto.time
+    """, [student_id]).fetchall()
     conn.close()
     
     return [
@@ -541,6 +577,90 @@ def list_schedule():
         )
         for row in result
     ]
+
+@app.get("/api/schedule/options/{subject_code}", response_model=List[SubjectTimeOption], tags=["schedule"])
+def get_subject_time_options(subject_code: str):
+    """Get all available time options for a specific subject"""
+    conn = get_connection()
+    result = conn.execute("""
+        SELECT id, subject_code, option_name, day, time, room, type, lecturer, capacity, enrolled
+        FROM subject_time_options
+        WHERE subject_code = ?
+        ORDER BY type, day, time
+    """, [subject_code]).fetchall()
+    conn.close()
+    
+    return [
+        SubjectTimeOption(
+            id=row[0],
+            subject_code=row[1],
+            option_name=row[2],
+            day=row[3],
+            time=row[4],
+            room=row[5],
+            type=row[6],
+            lecturer=row[7],
+            capacity=row[8],
+            enrolled=row[9],
+            available=row[8] - row[9]
+        )
+        for row in result
+    ]
+
+@app.get("/api/schedule/selections", tags=["schedule"])
+def get_schedule_selections(authorization: Optional[str] = Header(None)):
+    """Get student's current schedule time slot selections"""
+    student_id = get_student_from_token(authorization)
+    
+    conn = get_connection()
+    result = conn.execute("""
+        SELECT sss.subject_code, sss.time_option_id, sto.option_name, sto.type
+        FROM student_schedule_selections sss
+        JOIN subject_time_options sto ON sss.time_option_id = sto.id
+        WHERE sss.student_id = ?
+    """, [student_id]).fetchall()
+    conn.close()
+    
+    # Group by subject code
+    selections = {}
+    for row in result:
+        code = row[0]
+        if code not in selections:
+            selections[code] = []
+        selections[code].append({
+            "time_option_id": row[1],
+            "option_name": row[2],
+            "type": row[3]
+        })
+    
+    return selections
+
+@app.post("/api/schedule/update", tags=["schedule"])
+def update_schedule_selection(request: ScheduleSelectionRequest, authorization: Optional[str] = Header(None)):
+    """Update student's time slot selection for a subject"""
+    student_id = get_student_from_token(authorization)
+    
+    conn = get_connection()
+    
+    # Delete existing selections for this subject
+    conn.execute("""
+        DELETE FROM student_schedule_selections
+        WHERE student_id = ? AND subject_code = ?
+    """, [student_id, request.subject_code])
+    
+    # Insert new selections
+    for option_id in request.time_option_ids:
+        # Get next ID
+        next_id_result = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM student_schedule_selections").fetchone()
+        next_id = next_id_result[0]
+        
+        conn.execute("""
+            INSERT INTO student_schedule_selections VALUES (?, ?, ?, ?)
+        """, [next_id, student_id, request.subject_code, option_id])
+    
+    conn.close()
+    
+    return {"success": True, "message": "Schedule updated successfully"}
 
 # ====== ENROLMENT ENDPOINTS ======
 @app.get("/api/enrolment/periods", response_model=List[EnrolmentPeriod], tags=["enrolment"])
@@ -1118,6 +1238,17 @@ def enroll_subject(
     
     # Update subject enrollment status
     conn.execute("UPDATE subjects SET enrolled = TRUE WHERE code = ?", [req.subject_code])
+    
+    # If time options provided, save schedule selections
+    if req.time_option_ids:
+        for option_id in req.time_option_ids:
+            # Get next ID for schedule selection
+            next_sel_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM student_schedule_selections").fetchone()[0]
+            
+            conn.execute("""
+                INSERT INTO student_schedule_selections (id, student_id, subject_code, time_option_id)
+                VALUES (?, ?, ?, ?)
+            """, [next_sel_id, student_id, req.subject_code, option_id])
     
     conn.close()
     

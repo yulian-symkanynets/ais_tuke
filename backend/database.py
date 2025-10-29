@@ -249,6 +249,32 @@ def init_database():
         )
     """)
     
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subject_time_options (
+            id INTEGER PRIMARY KEY,
+            subject_code VARCHAR,
+            option_name VARCHAR,
+            day VARCHAR,
+            time VARCHAR,
+            room VARCHAR,
+            type VARCHAR,
+            lecturer VARCHAR,
+            capacity INTEGER,
+            enrolled INTEGER DEFAULT 0
+        )
+    """)
+    
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS student_schedule_selections (
+            id INTEGER PRIMARY KEY,
+            student_id INTEGER,
+            subject_code VARCHAR,
+            time_option_id INTEGER,
+            FOREIGN KEY (student_id) REFERENCES students(id),
+            FOREIGN KEY (time_option_id) REFERENCES subject_time_options(id)
+        )
+    """)
+    
     # Check if data already exists
     result = conn.execute("SELECT COUNT(*) FROM students").fetchone()
     if result[0] == 0:
@@ -446,6 +472,64 @@ def seed_data(conn):
     
     for exam in exams_data:
         conn.execute("INSERT INTO exams VALUES (?, ?, ?, ?, ?)", exam)
+    
+    # Insert subject time options (multiple time slots for each subject)
+    time_options_data = [
+        # ZADS - Data Structures
+        (1, 'ZADS', 'Morning Session', 'Monday', '08:00-09:40', 'PK6 C303', 'Lecture', 'Prof. John Smith', 80, 45),
+        (2, 'ZADS', 'Morning Session Lab', 'Wednesday', '08:00-09:40', 'PK6 LAB2', 'Lab', 'Prof. John Smith', 40, 45),
+        (3, 'ZADS', 'Afternoon Session', 'Tuesday', '14:00-15:40', 'PK6 C208', 'Lecture', 'Dr. Anna Johnson', 80, 65),
+        (4, 'ZADS', 'Afternoon Session Lab', 'Thursday', '14:00-15:40', 'PK6 LAB3', 'Lab', 'Dr. Anna Johnson', 40, 65),
+        
+        # WEBTECH - Web Technologies
+        (5, 'WEBTECH', 'Morning Lecture', 'Monday', '10:00-11:40', 'PK6 C409', 'Lecture', 'Dr. Anna Johnson', 70, 52),
+        (6, 'WEBTECH', 'Morning Lab', 'Thursday', '10:00-11:40', 'PK6 LAB1', 'Lab', 'Dr. Anna Johnson', 35, 52),
+        (7, 'WEBTECH', 'Evening Lecture', 'Wednesday', '16:00-17:40', 'PK6 C303', 'Lecture', 'Dr. Maria Rodriguez', 70, 80),
+        (8, 'WEBTECH', 'Evening Lab', 'Friday', '16:00-17:40', 'PK6 LAB2', 'Lab', 'Dr. Maria Rodriguez', 35, 80),
+        
+        # DBS - Database Systems
+        (9, 'DBS', 'Tuesday Morning', 'Tuesday', '08:00-09:40', 'PK6 C303', 'Lecture', 'Prof. Michael Brown', 75, 68),
+        (10, 'DBS', 'Tuesday Morning Lab', 'Thursday', '08:00-09:40', 'PK6 LAB3', 'Lab', 'Prof. Michael Brown', 38, 68),
+        (11, 'DBS', 'Wednesday Afternoon', 'Wednesday', '13:00-14:40', 'PK6 C208', 'Lecture', 'Dr. James Wilson', 75, 60),
+        (12, 'DBS', 'Wednesday Afternoon Lab', 'Friday', '13:00-14:40', 'PK6 LAB1', 'Lab', 'Dr. James Wilson', 38, 60),
+        
+        # SE - Software Engineering
+        (13, 'SE', 'Wednesday Morning', 'Wednesday', '08:00-09:40', 'PK6 C303', 'Lecture', 'Dr. Sarah Wilson', 85, 76),
+        (14, 'SE', 'Friday Morning Lab', 'Friday', '08:00-09:40', 'PK6 LAB1', 'Lab', 'Dr. Sarah Wilson', 42, 76),
+        (15, 'SE', 'Thursday Afternoon', 'Thursday', '13:00-14:40', 'PK6 C409', 'Lecture', 'Dr. Robert Garcia', 85, 80),
+        (16, 'SE', 'Monday Afternoon Lab', 'Monday', '13:00-14:40', 'PK6 LAB2', 'Lab', 'Dr. Robert Garcia', 42, 80),
+        
+        # AI - Artificial Intelligence
+        (17, 'AI', 'Friday Morning', 'Friday', '10:00-11:40', 'PK6 C208', 'Lecture', 'Prof. David Lee', 60, 48),
+        (18, 'AI', 'Tuesday Afternoon', 'Tuesday', '15:00-16:40', 'PK6 LAB3', 'Lab', 'Prof. David Lee', 30, 48),
+        (19, 'AI', 'Monday Evening', 'Monday', '16:00-17:40', 'PK6 C409', 'Lecture', 'Dr. Emily Davis', 60, 50),
+        (20, 'AI', 'Wednesday Evening Lab', 'Wednesday', '16:00-17:40', 'PK6 LAB1', 'Lab', 'Dr. Emily Davis', 30, 50),
+        
+        # COMPNET - Computer Networks
+        (21, 'COMPNET', 'Morning Option', 'Tuesday', '10:00-11:40', 'PK6 C303', 'Lecture', 'Dr. Robert Garcia', 65, 52),
+        (22, 'COMPNET', 'Morning Lab', 'Thursday', '10:00-11:40', 'PK6 LAB2', 'Lab', 'Dr. Robert Garcia', 32, 52),
+        (23, 'COMPNET', 'Afternoon Option', 'Monday', '14:00-15:40', 'PK6 C208', 'Lecture', 'Dr. Maria Rodriguez', 65, 60),
+        (24, 'COMPNET', 'Afternoon Lab', 'Wednesday', '14:00-15:40', 'PK6 LAB3', 'Lab', 'Dr. Maria Rodriguez', 32, 60),
+    ]
+    
+    for option in time_options_data:
+        conn.execute("INSERT INTO subject_time_options VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", option)
+    
+    # Insert default schedule selections for enrolled subjects
+    # Student 1 is enrolled in ZADS, WEBTECH, DBS, SE - let's give them default selections
+    default_selections = [
+        (1, 1, 'ZADS', 1),  # Morning Session Lecture
+        (2, 1, 'ZADS', 2),  # Morning Session Lab
+        (3, 1, 'WEBTECH', 5),  # Morning Lecture
+        (4, 1, 'WEBTECH', 6),  # Morning Lab
+        (5, 1, 'DBS', 11),  # Wednesday Afternoon Lecture
+        (6, 1, 'DBS', 12),  # Wednesday Afternoon Lab
+        (7, 1, 'SE', 13),  # Wednesday Morning Lecture
+        (8, 1, 'SE', 14),  # Friday Morning Lab
+    ]
+    
+    for selection in default_selections:
+        conn.execute("INSERT INTO student_schedule_selections VALUES (?, ?, ?, ?)", selection)
     
     # Insert grades with random data
     subjects = [
