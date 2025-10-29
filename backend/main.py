@@ -220,7 +220,7 @@ def verify_token(token: Optional[str]) -> Optional[int]:
     conn = get_connection()
     result = conn.execute("""
         SELECT student_id FROM sessions 
-        WHERE token = ? AND expires_at > datetime('now')
+        WHERE token = ? AND expires_at > now()
     """, [token]).fetchone()
     conn.close()
     
@@ -254,10 +254,16 @@ def register(req: RegisterRequest):
     # Create session token
     token = create_session_token()
     expires_at = datetime.now() + timedelta(days=7)
+    created_at = datetime.now()
+    
+    # Get next session id
+    session_id_result = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM sessions").fetchone()
+    session_id = session_id_result[0]
+    
     conn.execute("""
-        INSERT INTO sessions (student_id, token, created_at, expires_at)
-        VALUES (?, ?, datetime('now'), ?)
-    """, [new_id, token, expires_at.isoformat()])
+        INSERT INTO sessions (id, student_id, token, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, [session_id, new_id, token, created_at.isoformat(), expires_at.isoformat()])
     
     conn.close()
     
@@ -296,10 +302,16 @@ def login(req: LoginRequest):
     # Create session token
     token = create_session_token()
     expires_at = datetime.now() + timedelta(days=7)
+    created_at = datetime.now()
+    
+    # Get next session id
+    session_id_result = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM sessions").fetchone()
+    session_id = session_id_result[0]
+    
     conn.execute("""
-        INSERT INTO sessions (student_id, token, created_at, expires_at)
-        VALUES (?, ?, datetime('now'), ?)
-    """, [student_id, token, expires_at.isoformat()])
+        INSERT INTO sessions (id, student_id, token, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, [session_id, student_id, token, created_at.isoformat(), expires_at.isoformat()])
     
     conn.close()
     
