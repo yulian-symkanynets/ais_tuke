@@ -6,8 +6,74 @@ import { useState, useEffect } from "react";
 
 const API_BASE = "http://127.0.0.1:8000";
 
+type Dormitory = {
+  id: number;
+  name: string;
+  address: string;
+  distance: string;
+  rooms: number;
+  amenities: string[];
+  rent: string;
+  available: boolean;
+};
+
+type DormitoryApplication = {
+  dormitory: string;
+  room: string;
+  roomType: string;
+  floor: number;
+  status: string;
+  moveInDate: string;
+  rent: string;
+  deposit: string;
+};
+
 export function DormitoryPage() {
+  const [dormitories, setDormitories] = useState<Dormitory[]>([]);
+  const [currentApplication, setCurrentApplication] = useState<DormitoryApplication | null>(null);
+  const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchDormitories();
+    fetchCurrentApplication();
+  }, []);
+
+  const fetchDormitories = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/dormitory/list`);
+      if (response.ok) {
+        const data = await response.json();
+        setDormitories(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch dormitories:", error);
+    }
+  };
+
+  const fetchCurrentApplication = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/dormitory/application`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentApplication(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch application:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleApply = async (dormId: number, dormName: string) => {
     setApplying(dormId);
@@ -28,7 +94,8 @@ export function DormitoryPage() {
 
       if (response.ok) {
         alert(`Application for ${dormName} submitted successfully!`);
-        window.location.reload();
+        fetchCurrentApplication();
+        fetchDormitories();
       } else {
         const error = await response.json();
         alert(error.detail || "Failed to apply");
@@ -40,60 +107,6 @@ export function DormitoryPage() {
       setApplying(null);
     }
   };
-
-  const currentApplication = {
-    dormitory: "Jedlíkova Dormitory",
-    room: "B-312",
-    roomType: "Double Room",
-    floor: 3,
-    status: "Approved",
-    moveInDate: "September 15, 2025",
-    rent: "€120/month",
-    deposit: "€240",
-  };
-
-  const availableDormitories = [
-    {
-      id: 1,
-      name: "Jedlíkova Dormitory",
-      address: "Jedlíkova 2, 042 00 Košice",
-      distance: "5 min walk",
-      rooms: 45,
-      amenities: ["WiFi", "Kitchen", "Study Room", "Laundry"],
-      rent: "€120/month",
-      available: true,
-    },
-    {
-      id: 2,
-      name: "Park Dormitory",
-      address: "Park Komenského 1, 042 00 Košice",
-      distance: "8 min walk",
-      rooms: 12,
-      amenities: ["WiFi", "Kitchen", "Gym", "Parking"],
-      rent: "€150/month",
-      available: true,
-    },
-    {
-      id: 3,
-      name: "Medická Dormitory",
-      address: "Medická 2, 040 01 Košice",
-      distance: "12 min walk",
-      rooms: 0,
-      amenities: ["WiFi", "Kitchen", "Study Room"],
-      rent: "€110/month",
-      available: false,
-    },
-    {
-      id: 4,
-      name: "VŠ Campus Dormitory",
-      address: "Boženy Němcovej 3, 040 01 Košice",
-      distance: "15 min walk",
-      rooms: 23,
-      amenities: ["WiFi", "Kitchen", "Cafeteria", "Sports Hall"],
-      rent: "€135/month",
-      available: true,
-    },
-  ];
 
   const getAmenityIcon = (amenity: string) => {
     switch (amenity) {
@@ -117,51 +130,61 @@ export function DormitoryPage() {
       </div>
 
       {/* Current Application Status */}
-      <Card className="shadow-md border-0">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Your Current Application</CardTitle>
-            <Badge className="bg-green-600">
-              {currentApplication.status}
-            </Badge>
-          </div>
-          <CardDescription>Active accommodation details</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Dormitory</p>
-              <p className="font-medium">{currentApplication.dormitory}</p>
+      {currentApplication && (
+        <Card className="shadow-md border-0">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Your Current Application</CardTitle>
+              <Badge className={currentApplication.status === "Approved" ? "bg-green-600" : currentApplication.status === "Pending" ? "bg-yellow-600" : "bg-gray-600"}>
+                {currentApplication.status}
+              </Badge>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Room</p>
-              <p className="font-medium">{currentApplication.room} ({currentApplication.roomType})</p>
+            <CardDescription>Active accommodation details</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Dormitory</p>
+                <p className="font-medium">{currentApplication.dormitory}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Room</p>
+                <p className="font-medium">{currentApplication.room} ({currentApplication.roomType})</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Move-in Date</p>
+                <p className="font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  {currentApplication.moveInDate}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Monthly Rent</p>
+                <p className="font-medium">{currentApplication.rent}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Move-in Date</p>
-              <p className="font-medium flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                {currentApplication.moveInDate}
-              </p>
+            <div className="mt-4 flex gap-3">
+              <Button variant="outline">View Contract</Button>
+              <Button variant="outline">Pay Rent</Button>
+              <Button variant="destructive">Cancel Application</Button>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Monthly Rent</p>
-              <p className="font-medium">{currentApplication.rent}</p>
-            </div>
-          </div>
-          <div className="mt-4 flex gap-3">
-            <Button variant="outline">View Contract</Button>
-            <Button variant="outline">Pay Rent</Button>
-            <Button variant="destructive">Cancel Application</Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {loading && !currentApplication && (
+        <Card className="shadow-md border-0">
+          <CardContent className="pt-6">
+            <div className="text-center text-muted-foreground">Loading application status...</div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Available Dormitories */}
       <div>
         <h2 className="mb-4">Available Dormitories</h2>
         <div className="grid gap-4 md:grid-cols-2">
-          {availableDormitories.map((dorm) => (
+          {dormitories.map((dorm) => (
             <Card 
               key={dorm.id} 
               className={`shadow-md border-0 hover:shadow-lg transition-shadow ${

@@ -44,9 +44,7 @@ export function GradesPage() {
   const [error, setError] = useState<string | null>(null);
   const [semesters, setSemesters] = useState<string[]>([]);
 
-  // Controls for random generation
-  const [count, setCount] = useState(12);
-  const [seed, setSeed] = useState<string>("");
+  // Controls for filtering
   const [onlySemester, setOnlySemester] = useState(false);
   const [currentSemester, setCurrentSemester] = useState<string>("Winter 2025/26");
 
@@ -76,12 +74,22 @@ export function GradesPage() {
     const ac = new AbortController();
     abortRef.current = ac;
 
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      setError("Not authenticated");
+      setLoading(false);
+      return;
+    }
+
     const params = new URLSearchParams();
-    params.set("count", String(count));
-    if (seed.trim()) params.set("seed", seed.trim());
     if (onlySemester && currentSemester) params.set("semester", currentSemester);
 
-    fetch(`${API_BASE}/api/grades?${params.toString()}` , { signal: ac.signal })
+    fetch(`${API_BASE}/api/grades?${params.toString()}`, { 
+      signal: ac.signal,
+      headers: {
+        "Authorization": `Bearer ${token}`,
+      },
+    })
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         return r.json();
@@ -120,32 +128,10 @@ export function GradesPage() {
       </div>
 
       {/* Controls */}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
         <div className="flex items-end gap-3">
           <div className="flex-1">
-            <label className="text-sm text-muted-foreground">Records</label>
-            <input
-              type="number"
-              min={1}
-              max={200}
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
-              className="mt-1 w-full rounded-md border px-3 py-2"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-sm text-muted-foreground">Seed (optional)</label>
-            <input
-              value={seed}
-              onChange={(e) => setSeed(e.target.value)}
-              placeholder="e.g. 42"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-            />
-          </div>
-        </div>
-        <div className="flex items-end gap-3">
-          <div className="flex-1">
-            <label className="text-sm text-muted-foreground">Current semester</label>
+            <label className="text-sm text-muted-foreground">Filter by semester</label>
             <select
               value={currentSemester}
               onChange={(e) => setCurrentSemester(e.target.value)}
@@ -163,10 +149,14 @@ export function GradesPage() {
               id="only-sem"
               type="checkbox"
               checked={onlySemester}
-              onChange={(e) => setOnlySemester(e.target.checked)}
+              onChange={(e) => {
+                setOnlySemester(e.target.checked);
+                // Auto-refresh when toggling
+                setTimeout(() => fetchGrades(), 100);
+              }}
               className="h-4 w-4"
             />
-            Generate only this semester
+            Show only this semester
           </label>
         </div>
         <div className="flex items-end gap-3">

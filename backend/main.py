@@ -423,22 +423,34 @@ def list_semesters():
 @app.get("/api/grades", response_model=List[Grade], tags=["grades"])
 def list_grades(
     semester: Optional[str] = Query(None, description="Filter by semester"),
+    authorization: Optional[str] = Header(None)
 ):
+    """Get grades for authenticated student"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     conn = get_connection()
     
     if semester:
         result = conn.execute("""
             SELECT id, subject, code, grade, credits, semester, date, numeric_grade
             FROM grades
-            WHERE semester = ?
+            WHERE student_id = ? AND semester = ?
             ORDER BY semester, subject, code
-        """, [semester]).fetchall()
+        """, [student_id, semester]).fetchall()
     else:
         result = conn.execute("""
             SELECT id, subject, code, grade, credits, semester, date, numeric_grade
             FROM grades
+            WHERE student_id = ?
             ORDER BY semester, subject, code
-        """).fetchall()
+        """, [student_id]).fetchall()
     
     conn.close()
     
@@ -457,7 +469,20 @@ def list_grades(
     ]
 
 @app.get("/api/grades/stats", tags=["grades"])
-def grade_stats(semester: Optional[str] = Query(None)):
+def grade_stats(
+    semester: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None)
+):
+    """Get grade statistics for authenticated student"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     conn = get_connection()
     
     if semester:
@@ -467,8 +492,8 @@ def grade_stats(semester: Optional[str] = Query(None)):
                 SUM(credits) as total_credits,
                 SUM(numeric_grade * credits) / SUM(credits) as weighted_avg
             FROM grades
-            WHERE semester = ?
-        """, [semester]).fetchone()
+            WHERE student_id = ? AND semester = ?
+        """, [student_id, semester]).fetchone()
     else:
         result = conn.execute("""
             SELECT 
@@ -476,7 +501,8 @@ def grade_stats(semester: Optional[str] = Query(None)):
                 SUM(credits) as total_credits,
                 SUM(numeric_grade * credits) / SUM(credits) as weighted_avg
             FROM grades
-        """).fetchone()
+            WHERE student_id = ?
+        """, [student_id]).fetchone()
     
     conn.close()
     
@@ -837,14 +863,24 @@ def list_dormitories():
     return dormitories
 
 @app.get("/api/dormitory/application", response_model=DormitoryApplication, tags=["dormitory"])
-def get_dormitory_application():
+def get_dormitory_application(authorization: Optional[str] = Header(None)):
+    """Get dormitory application for authenticated student"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
     conn = get_connection()
     result = conn.execute("""
         SELECT dormitory, room, room_type, floor, status, move_in_date, rent, deposit
         FROM dormitory_applications
-        WHERE student_id = 1
+        WHERE student_id = ?
         LIMIT 1
-    """).fetchone()
+    """, [student_id]).fetchone()
     conn.close()
     
     if not result:
