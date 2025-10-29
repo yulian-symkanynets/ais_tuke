@@ -55,7 +55,9 @@ def init_database():
             lecturer VARCHAR,
             schedule VARCHAR,
             students INTEGER,
-            enrolled BOOLEAN
+            enrolled BOOLEAN,
+            description VARCHAR,
+            year INTEGER
         )
     """)
     
@@ -276,17 +278,21 @@ def seed_data(conn):
     
     # Insert subjects
     subjects_data = [
-        (1, 'ZADS', 'Data Structures and Algorithms', 6, 'Winter', 'Prof. John Smith', 'Mon, Wed 08:00-09:40', 145, True),
-        (2, 'WEBTECH', 'Web Technologies', 5, 'Winter', 'Dr. Anna Johnson', 'Mon, Thu 10:00-11:40', 132, True),
-        (3, 'DBS', 'Database Systems', 6, 'Winter', 'Prof. Michael Brown', 'Tue 13:00-14:40', 128, True),
-        (4, 'SE', 'Software Engineering', 6, 'Winter', 'Dr. Sarah Wilson', 'Wed 08:00-09:40', 156, True),
-        (5, 'AI', 'Artificial Intelligence', 6, 'Winter', 'Prof. David Lee', 'Fri 10:00-11:40', 98, False),
-        (6, 'MOBILE', 'Mobile Application Development', 5, 'Winter', 'Dr. Emily Davis', 'Thu 13:00-14:40', 87, False),
+        (1, 'ZADS', 'Data Structures and Algorithms', 6, 'Winter', 'Prof. John Smith', 'Mon, Wed 08:00-09:40', 145, True, 'Learn fundamental data structures like arrays, linked lists, trees, and graphs. Master algorithm design and analysis.', 2),
+        (2, 'WEBTECH', 'Web Technologies', 5, 'Winter', 'Dr. Anna Johnson', 'Mon, Thu 10:00-11:40', 132, True, 'Modern web development with HTML5, CSS3, JavaScript, and popular frameworks. Build responsive web applications.', 2),
+        (3, 'DBS', 'Database Systems', 6, 'Winter', 'Prof. Michael Brown', 'Tue 13:00-14:40', 128, True, 'Database design, SQL, transactions, and NoSQL databases. Learn to build and optimize database systems.', 2),
+        (4, 'SE', 'Software Engineering', 6, 'Winter', 'Dr. Sarah Wilson', 'Wed 08:00-09:40', 156, True, 'Software development methodologies, design patterns, testing, and project management principles.', 3),
+        (5, 'AI', 'Artificial Intelligence', 6, 'Winter', 'Prof. David Lee', 'Fri 10:00-11:40', 98, False, 'Introduction to AI concepts, machine learning algorithms, neural networks, and practical applications.', 3),
+        (6, 'MOBILE', 'Mobile Application Development', 5, 'Winter', 'Dr. Emily Davis', 'Thu 13:00-14:40', 87, False, 'Develop mobile apps for iOS and Android using modern frameworks like React Native and Flutter.', 3),
+        (7, 'COMPNET', 'Computer Networks', 5, 'Winter', 'Dr. Robert Garcia', 'Tue, Thu 10:00-11:40', 112, False, 'Network protocols, TCP/IP, routing, security, and network programming. Hands-on labs with real network equipment.', 2),
+        (8, 'OS', 'Operating Systems', 6, 'Winter', 'Prof. Maria Rodriguez', 'Mon, Wed 13:00-14:40', 95, False, 'OS architecture, process management, memory management, file systems, and concurrency.', 2),
+        (9, 'PROG1', 'Programming 1', 6, 'Winter', 'Dr. James Wilson', 'Mon, Wed, Fri 08:00-09:40', 180, False, 'Introduction to programming using Python. Learn variables, loops, functions, and basic algorithms.', 1),
+        (10, 'MATH1', 'Mathematics 1', 8, 'Winter', 'Prof. Elena Petrova', 'Tue, Thu 08:00-09:40', 165, False, 'Calculus, linear algebra, and discrete mathematics for computer science students.', 1),
     ]
     
     for subj in subjects_data:
         conn.execute("""
-            INSERT INTO subjects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO subjects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, subj)
     
     # Insert schedule

@@ -1,9 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
-import { Search, BookOpen, Users, Clock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Input } from "./ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { BookOpen, Users, Clock, GraduationCap, Filter } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -17,6 +18,8 @@ type Subject = {
   students: number;
   lecturer: string;
   schedule: string;
+  description?: string;
+  year?: number;
 };
 
 export function SubjectsPage() {
@@ -24,13 +27,31 @@ export function SubjectsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [enrolling, setEnrolling] = useState<string | null>(null);
+  const [yearFilter, setYearFilter] = useState<string>("all");
+  const [semesterFilter, setSemesterFilter] = useState<string>("all");
+  const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
 
   useEffect(() => {
     loadSubjects();
-  }, []);
+  }, [yearFilter, semesterFilter]);
 
   const loadSubjects = () => {
-    fetch(`${API_BASE}/api/subjects`)
+    setLoading(true);
+    let url = `${API_BASE}/api/subjects`;
+    const params = new URLSearchParams();
+    
+    if (yearFilter !== "all") {
+      params.append("year", yearFilter);
+    }
+    if (semesterFilter !== "all") {
+      params.append("semester", semesterFilter);
+    }
+    
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    fetch(url)
       .then(res => res.json())
       .then(data => setSubjects(data))
       .catch(err => console.error("Failed to load subjects:", err))
@@ -69,7 +90,8 @@ export function SubjectsPage() {
 
   const filteredSubjects = subjects.filter(subject =>
     subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    subject.code.toLowerCase().includes(searchTerm.toLowerCase())
+    subject.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    subject.lecturer.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -77,50 +99,92 @@ export function SubjectsPage() {
       <div>
         <h1>Subjects</h1>
         <p className="text-muted-foreground">
-          Browse and manage your course enrolments
+          Browse and enroll in available subjects
         </p>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search subjects..."
-            className="pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <Badge variant="secondary" className="px-4 py-2">
-          {subjects.filter(s => s.enrolled).length} Enrolled
-        </Badge>
-      </div>
+      {/* Filters */}
+      <Card className="shadow-md border-0">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Filter className="h-5 w-5 text-primary" />
+            <CardTitle>Filters</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Search</label>
+              <Input
+                placeholder="Search subjects..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Year</label>
+              <Select value={yearFilter} onValueChange={setYearFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All years" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All years</SelectItem>
+                  <SelectItem value="1">Year 1</SelectItem>
+                  <SelectItem value="2">Year 2</SelectItem>
+                  <SelectItem value="3">Year 3</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Semester</label>
+              <Select value={semesterFilter} onValueChange={setSemesterFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All semesters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All semesters</SelectItem>
+                  <SelectItem value="Winter">Winter</SelectItem>
+                  <SelectItem value="Summer">Summer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Loading subjects...</div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredSubjects.map((subject) => (
-            <Card key={subject.code} className="shadow-md border-0 hover:shadow-lg transition-shadow">
+            <Card key={subject.id} className="shadow-md border-0 hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">{subject.code}</Badge>
-                      <Badge className="bg-accent text-accent-foreground">
-                        {subject.credits} ECTS
-                      </Badge>
+                    <div className="flex items-center gap-2 mb-1">
+                      <CardTitle className="text-lg">{subject.code}</CardTitle>
+                      {subject.enrolled && (
+                        <Badge variant="secondary" className="text-xs">Enrolled</Badge>
+                      )}
                     </div>
-                    <CardTitle className="text-lg">{subject.name}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {subject.lecturer}
+                    <CardDescription className="font-medium text-foreground">
+                      {subject.name}
                     </CardDescription>
                   </div>
-                  <BookOpen className="h-5 w-5 text-muted-foreground" />
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <GraduationCap className="h-4 w-4" />
+                    {subject.lecturer}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <BookOpen className="h-4 w-4" />
+                    {subject.credits} credits • Year {subject.year || 1} • {subject.semester}
+                  </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     {subject.schedule}
@@ -129,6 +193,25 @@ export function SubjectsPage() {
                     <Users className="h-4 w-4" />
                     {subject.students} students
                   </div>
+
+                  {subject.description && (
+                    <>
+                      <div className="pt-2 border-t">
+                        <button
+                          onClick={() => setExpandedSubject(expandedSubject === subject.id ? null : subject.id)}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          {expandedSubject === subject.id ? "Hide" : "Show"} description
+                        </button>
+                        {expandedSubject === subject.id && (
+                          <p className="text-sm text-muted-foreground mt-2">
+                            {subject.description}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+
                   <Button 
                     className="w-full mt-2"
                     variant={subject.enrolled ? "secondary" : "default"}
@@ -141,6 +224,12 @@ export function SubjectsPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {!loading && filteredSubjects.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          No subjects found matching your filters.
         </div>
       )}
     </div>

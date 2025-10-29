@@ -31,6 +31,13 @@ class AuthResponse(BaseModel):
     token: str
     student: Dict
 
+class EnrollRequest(BaseModel):
+    subject_code: str
+
+class DormitoryApplyRequest(BaseModel):
+    dormitory_id: int
+    room_type: str
+
 # ====== MODELS ======
 class Grade(BaseModel):
     id: int
@@ -52,6 +59,8 @@ class Subject(BaseModel):
     students: int
     lecturer: str
     schedule: str
+    description: str = ""
+    year: int = 1
 
 class ScheduleItem(BaseModel):
     id: int
@@ -457,13 +466,31 @@ def grade_stats(semester: Optional[str] = Query(None)):
 
 # ====== SUBJECTS ENDPOINTS ======
 @app.get("/api/subjects", response_model=List[Subject], tags=["subjects"])
-def list_subjects():
+def list_subjects(
+    year: Optional[int] = Query(None, description="Filter by year (1, 2, 3)"),
+    semester: Optional[str] = Query(None, description="Filter by semester (Winter, Summer)")
+):
     conn = get_connection()
-    result = conn.execute("""
-        SELECT id, code, name, credits, semester, enrolled, students, lecturer, schedule
+    
+    # Build dynamic query with filters
+    query = """
+        SELECT id, code, name, credits, semester, enrolled, students, lecturer, schedule, description, year
         FROM subjects
-        ORDER BY enrolled DESC, name
-    """).fetchall()
+        WHERE 1=1
+    """
+    params = []
+    
+    if year is not None:
+        query += " AND year = ?"
+        params.append(year)
+    
+    if semester:
+        query += " AND semester = ?"
+        params.append(semester)
+    
+    query += " ORDER BY year, name"
+    
+    result = conn.execute(query, params).fetchall()
     conn.close()
     
     return [
@@ -476,7 +503,9 @@ def list_subjects():
             enrolled=row[5],
             students=row[6],
             lecturer=row[7],
-            schedule=row[8]
+            schedule=row[8],
+            description=row[9] if len(row) > 9 else "",
+            year=row[10] if len(row) > 10 else 1
         )
         for row in result
     ]
@@ -1042,7 +1071,7 @@ def assign_grade(
 # ====== STUDENT ACTION ENDPOINTS ======
 @app.post("/api/enrolment/enroll", tags=["enrolment"])
 def enroll_subject(
-    subject_code: str,
+    req: EnrollRequest,
     authorization: Optional[str] = Header(None)
 ):
     """Enroll in a subject"""
@@ -1060,7 +1089,7 @@ def enroll_subject(
     # Get subject details
     subject = conn.execute("""
         SELECT name, credits FROM subjects WHERE code = ?
-    """, [subject_code]).fetchone()
+    """, [req.subject_code]).fetchone()
     
     if not subject:
         conn.close()
@@ -1069,7 +1098,7 @@ def enroll_subject(
     # Check if already enrolled
     existing = conn.execute("""
         SELECT id FROM enrolled_subjects WHERE student_id = ? AND code = ?
-    """, [student_id, subject_code]).fetchone()
+    """, [student_id, req.subject_code]).fetchone()
     
     if existing:
         conn.close()
@@ -1085,10 +1114,10 @@ def enroll_subject(
     conn.execute("""
         INSERT INTO enrolled_subjects (id, student_id, code, name, credits, status, enrolled_date)
         VALUES (?, ?, ?, ?, ?, 'pending', ?)
-    """, [new_id, student_id, subject_code, subject[0], subject[1], current_date])
+    """, [new_id, student_id, req.subject_code, subject[0], subject[1], current_date])
     
     # Update subject enrollment status
-    conn.execute("UPDATE subjects SET enrolled = TRUE WHERE code = ?", [subject_code])
+    conn.execute("UPDATE subjects SET enrolled = TRUE WHERE code = ?", [req.subject_code])
     
     conn.close()
     
@@ -1096,8 +1125,7 @@ def enroll_subject(
 
 @app.post("/api/dormitory/apply", tags=["dormitory"])
 def apply_dormitory(
-    dormitory_id: int,
-    room_type: str,
+    req: DormitoryApplyRequest,
     authorization: Optional[str] = Header(None)
 ):
     """Apply for dormitory accommodation"""
@@ -1115,7 +1143,7 @@ def apply_dormitory(
     # Get dormitory details
     dorm = conn.execute("""
         SELECT name, rent FROM dormitories WHERE id = ? AND available = TRUE
-    """, [dormitory_id]).fetchone()
+    """, [req.dormitory_id]).fetchone()
     
     if not dorm:
         conn.close()
@@ -1146,7 +1174,7 @@ def apply_dormitory(
         INSERT INTO dormitory_applications 
         (id, student_id, dormitory, room, room_type, floor, status, move_in_date, rent, deposit)
         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
-    """, [new_id, student_id, dorm[0], room_num, room_type, floor, move_in, dorm[1], dorm[1].replace("€", "€2")])
+    """, [new_id, student_id, dorm[0], room_num, req.room_type, floor, move_in, dorm[1], dorm[1].replace("€", "€2")])
     
     conn.close()
     
