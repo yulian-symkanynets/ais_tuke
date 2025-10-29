@@ -201,6 +201,12 @@ app.add_middleware(
 
 # ====== HELPER FUNCTIONS ======
 def hash_password(password: str) -> str:
+    """
+    Hash password using SHA-256.
+    
+    WARNING: This is for DEMO purposes only! 
+    In production, use bcrypt, argon2, or scrypt with proper salt.
+    """
     return hashlib.sha256(password.encode()).hexdigest()
 
 def create_session_token() -> str:

@@ -9,8 +9,26 @@ Backend API for the AIS TUKE Student Portal Dashboard with DuckDB database integ
 - **FastAPI Framework** with automatic API documentation
 - **CORS Support** for frontend integration
 - **Type-safe models** using Pydantic
+- **Simple Authentication** with login/register (demo purposes)
+
+## Security Note
+
+⚠️ **This is a demo application**. The authentication system uses SHA-256 for password hashing, which is suitable for demonstration but NOT for production use. For production, you should:
+
+- Use proper password hashing libraries like `bcrypt`, `argon2`, or `scrypt`
+- Implement proper salt and multiple iterations
+- Use environment variables for sensitive configuration
+- Implement rate limiting on authentication endpoints
+- Use HTTPS in production
+- Consider JWT tokens instead of simple session tokens
 
 ## API Endpoints
+
+### Authentication
+- `POST /api/auth/register` - Register new student account
+- `POST /api/auth/login` - Login with email and password
+- `POST /api/auth/logout` - Logout (invalidate session)
+- `GET /api/auth/me` - Get current authenticated user
 
 ### Health & Meta
 - `GET /health` - Health check
