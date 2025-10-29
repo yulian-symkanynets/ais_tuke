@@ -247,8 +247,8 @@ def register(req: RegisterRequest):
     # Hash password and create student
     password_hash = hash_password(req.password)
     conn.execute("""
-        INSERT INTO students (id, first_name, last_name, email, student_id, year, program, gpa, password_hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, ?)
+        INSERT INTO students (id, first_name, last_name, email, student_id, year, program, gpa, password_hash, role)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, ?, 'student')
     """, [new_id, req.firstName, req.lastName, req.email, req.studentId, req.year, req.program, password_hash])
     
     # Create session token
@@ -277,7 +277,8 @@ def register(req: RegisterRequest):
             "studentId": req.studentId,
             "year": req.year,
             "program": req.program,
-            "gpa": 0.0
+            "gpa": 0.0,
+            "role": "student"
         }
     )
 
@@ -288,7 +289,7 @@ def login(req: LoginRequest):
     # Find student
     password_hash = hash_password(req.password)
     result = conn.execute("""
-        SELECT id, first_name, last_name, email, student_id, year, program, gpa
+        SELECT id, first_name, last_name, email, student_id, year, program, gpa, role
         FROM students
         WHERE email = ? AND password_hash = ?
     """, [req.email, password_hash]).fetchone()
@@ -325,7 +326,8 @@ def login(req: LoginRequest):
             "studentId": result[4],
             "year": result[5],
             "program": result[6],
-            "gpa": result[7]
+            "gpa": result[7],
+            "role": result[8] if len(result) > 8 else "student"
         }
     )
 
@@ -948,6 +950,240 @@ def get_settings():
         }
     
     return settings
+
+# ====== TEACHER/ADMIN ENDPOINTS ======
+@app.post("/api/teacher/exam/create", tags=["teacher"])
+def create_exam(
+    subject: str,
+    date: str,
+    time: str,
+    room: str,
+    authorization: Optional[str] = Header(None)
+):
+    """Create a new exam (teacher only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Check if user is teacher
+    conn = get_connection()
+    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [student_id]).fetchone()
+    
+    if not user_role or user_role[0] != 'teacher':
+        conn.close()
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    # Get next exam id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM exams").fetchone()[0]
+    new_id = max_id + 1
+    
+    conn.execute("""
+        INSERT INTO exams (id, subject, date, time, room)
+        VALUES (?, ?, ?, ?, ?)
+    """, [new_id, subject, date, time, room])
+    
+    conn.close()
+    
+    return {"message": "Exam created successfully", "id": new_id}
+
+@app.post("/api/teacher/grade/assign", tags=["teacher"])
+def assign_grade(
+    student_id: int,
+    subject: str,
+    code: str,
+    grade: str,
+    credits: int,
+    semester: str,
+    authorization: Optional[str] = Header(None)
+):
+    """Assign a grade to a student (teacher only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    teacher_id = verify_token(token)
+    
+    if not teacher_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Check if user is teacher
+    conn = get_connection()
+    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
+    
+    if not user_role or user_role[0] != 'teacher':
+        conn.close()
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    # Grade to numeric mapping
+    grade_map = {"A": 1.0, "B": 1.5, "C": 2.0, "D": 3.0, "E": 4.0, "FX": 5.0}
+    numeric_grade = grade_map.get(grade, 1.0)
+    
+    # Get next grade id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM grades").fetchone()[0]
+    new_id = max_id + 1
+    
+    from datetime import datetime
+    current_date = datetime.now().strftime("%b %d, %Y")
+    
+    conn.execute("""
+        INSERT INTO grades (id, student_id, subject, code, grade, credits, semester, date, numeric_grade)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [new_id, student_id, subject, code, grade, credits, semester, current_date, numeric_grade])
+    
+    conn.close()
+    
+    return {"message": "Grade assigned successfully", "id": new_id}
+
+# ====== STUDENT ACTION ENDPOINTS ======
+@app.post("/api/enrolment/enroll", tags=["enrolment"])
+def enroll_subject(
+    subject_code: str,
+    authorization: Optional[str] = Header(None)
+):
+    """Enroll in a subject"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    conn = get_connection()
+    
+    # Get subject details
+    subject = conn.execute("""
+        SELECT name, credits FROM subjects WHERE code = ?
+    """, [subject_code]).fetchone()
+    
+    if not subject:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # Check if already enrolled
+    existing = conn.execute("""
+        SELECT id FROM enrolled_subjects WHERE student_id = ? AND code = ?
+    """, [student_id, subject_code]).fetchone()
+    
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Already enrolled in this subject")
+    
+    # Get next id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM enrolled_subjects").fetchone()[0]
+    new_id = max_id + 1
+    
+    from datetime import datetime
+    current_date = datetime.now().strftime("%b %d, %Y")
+    
+    conn.execute("""
+        INSERT INTO enrolled_subjects (id, student_id, code, name, credits, status, enrolled_date)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?)
+    """, [new_id, student_id, subject_code, subject[0], subject[1], current_date])
+    
+    # Update subject enrollment status
+    conn.execute("UPDATE subjects SET enrolled = TRUE WHERE code = ?", [subject_code])
+    
+    conn.close()
+    
+    return {"message": "Successfully enrolled in subject", "id": new_id}
+
+@app.post("/api/dormitory/apply", tags=["dormitory"])
+def apply_dormitory(
+    dormitory_id: int,
+    room_type: str,
+    authorization: Optional[str] = Header(None)
+):
+    """Apply for dormitory accommodation"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    conn = get_connection()
+    
+    # Get dormitory details
+    dorm = conn.execute("""
+        SELECT name, rent FROM dormitories WHERE id = ? AND available = TRUE
+    """, [dormitory_id]).fetchone()
+    
+    if not dorm:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Dormitory not available")
+    
+    # Check if already has application
+    existing = conn.execute("""
+        SELECT id FROM dormitory_applications WHERE student_id = ?
+    """, [student_id]).fetchone()
+    
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Already have a dormitory application")
+    
+    # Get next id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM dormitory_applications").fetchone()[0]
+    new_id = max_id + 1
+    
+    from datetime import datetime
+    move_in = (datetime.now() + timedelta(days=30)).strftime("%B %d, %Y")
+    
+    # Generate room number
+    import random
+    floor = random.randint(1, 5)
+    room_num = f"{chr(65 + random.randint(0, 3))}-{random.randint(100, 599)}"
+    
+    conn.execute("""
+        INSERT INTO dormitory_applications 
+        (id, student_id, dormitory, room, room_type, floor, status, move_in_date, rent, deposit)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+    """, [new_id, student_id, dorm[0], room_num, room_type, floor, move_in, dorm[1], dorm[1].replace("€", "€2")])
+    
+    conn.close()
+    
+    return {"message": "Dormitory application submitted", "id": new_id}
+
+@app.put("/api/settings/update", tags=["settings"])
+def update_settings(
+    settings: Dict[str, str],
+    authorization: Optional[str] = Header(None)
+):
+    """Update user settings"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    conn = get_connection()
+    
+    # Delete existing settings
+    conn.execute("DELETE FROM settings WHERE student_id = ?", [student_id])
+    
+    # Insert new settings
+    for key, value in settings.items():
+        max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM settings").fetchone()[0]
+        new_id = max_id + 1
+        conn.execute("""
+            INSERT INTO settings (id, student_id, key, value)
+            VALUES (?, ?, ?, ?)
+        """, [new_id, student_id, key, value])
+    
+    conn.close()
+    
+    return {"message": "Settings updated successfully"}
 
 if __name__ == "__main__":
     import uvicorn

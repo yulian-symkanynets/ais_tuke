@@ -95,7 +95,12 @@ export default function App() {
       case "notifications":
         return <NotificationsPage />;
       case "settings":
-        return <SettingsPage />;
+        return <SettingsPage 
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+          language={language}
+          onToggleLanguage={() => setLanguage(language === "EN" ? "SK" : "EN")}
+        />;
       case "profile":
         return <ProfilePage />;
       default:

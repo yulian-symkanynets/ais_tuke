@@ -29,7 +29,8 @@ def init_database():
             year INTEGER,
             program VARCHAR,
             gpa DOUBLE,
-            password_hash VARCHAR
+            password_hash VARCHAR,
+            role VARCHAR DEFAULT 'student'
         )
     """)
     
@@ -263,8 +264,15 @@ def seed_data(conn):
     password_hash = hashlib.sha256("password123".encode()).hexdigest()
     conn.execute("""
         INSERT INTO students VALUES (1, 'Yulian', 'Symkanynets', 'yulian@student.tuke.sk', 
-                                    'ST12345', 3, 'Computer Science', 3.45, ?)
+                                    'ST12345', 3, 'Computer Science', 3.45, ?, 'student')
     """, [password_hash])
+    
+    # Insert teacher/admin account (password: "teacher123")
+    teacher_hash = hashlib.sha256("teacher123".encode()).hexdigest()
+    conn.execute("""
+        INSERT INTO students VALUES (2, 'Prof. John', 'Smith', 'john.smith@tuke.sk', 
+                                    'T001', 0, 'Faculty', 0.0, ?, 'teacher')
+    """, [teacher_hash])
     
     # Insert subjects
     subjects_data = [
