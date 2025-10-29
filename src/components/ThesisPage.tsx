@@ -15,22 +15,72 @@ import {
   AlertCircle,
   BookOpen
 } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+type Thesis = {
+  id: number;
+  title: string;
+  type: string;
+  status: string;
+  supervisor: string;
+  consultant: string;
+  department: string;
+  startDate: string;
+  submissionDeadline: string;
+  defenseDate: string;
+  progress: number;
+};
+
+type ThesisMilestone = {
+  id: number;
+  title: string;
+  status: string;
+  date: string;
+  description: string;
+};
+
+type ThesisDocument = {
+  id: number;
+  name: string;
+  size: string;
+  uploaded: string;
+};
 
 export function ThesisPage() {
-  const thesisInfo = {
-    title: "Application of Machine Learning in Web Security Analysis",
-    type: "Bachelor Thesis",
-    status: "In Progress",
-    supervisor: "Prof. Dr. Michael Brown",
-    consultant: "Dr. Anna Johnson",
-    department: "Department of Computers and Informatics",
-    startDate: "September 1, 2025",
-    submissionDeadline: "May 15, 2026",
-    defenseDate: "June 20, 2026",
-    progress: 45,
-  };
+  const [thesisInfo, setThesisInfo] = useState<Thesis | null>(null);
+  const [milestones, setMilestones] = useState<ThesisMilestone[]>([]);
+  const [documents, setDocuments] = useState<ThesisDocument[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const milestones = [
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_BASE}/api/thesis`).then(res => res.json()),
+      fetch(`${API_BASE}/api/thesis/milestones`).then(res => res.json()),
+      fetch(`${API_BASE}/api/thesis/documents`).then(res => res.json()),
+    ])
+      .then(([thesis, milestonesData, documentsData]) => {
+        setThesisInfo(thesis);
+        setMilestones(milestonesData);
+        setDocuments(documentsData);
+      })
+      .catch(err => console.error("Failed to load thesis data:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !thesisInfo) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1>Thesis</h1>
+          <p className="text-muted-foreground">Loading thesis information...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const milestones_with_defaults = [
     { 
       id: 1, 
       title: "Thesis Registration", 
@@ -62,8 +112,6 @@ export function ThesisPage() {
     { 
       id: 5, 
       title: "Final Draft Submission", 
-      status: "pending", 
-      date: "May 1, 2026",
       description: "Submit complete thesis draft"
     },
     { 
@@ -73,13 +121,6 @@ export function ThesisPage() {
       date: "June 20, 2026",
       description: "Oral defense presentation"
     },
-  ];
-
-  const documents = [
-    { name: "Thesis Template.docx", size: "245 KB", uploaded: "Sep 1, 2025" },
-    { name: "Literature Review.pdf", size: "1.2 MB", uploaded: "Oct 15, 2025" },
-    { name: "Research Proposal.pdf", size: "890 KB", uploaded: "Sep 20, 2025" },
-    { name: "Bibliography.bib", size: "45 KB", uploaded: "Oct 10, 2025" },
   ];
 
   const getStatusBadge = (status: string) => {
