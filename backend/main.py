@@ -536,7 +536,14 @@ def list_subjects(
 @app.get("/api/schedule", response_model=List[ScheduleItem], tags=["schedule"])
 def list_schedule(authorization: Optional[str] = Header(None)):
     """Get student's personalized schedule based on their time slot selections"""
-    student_id = get_student_from_token(authorization)
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = get_connection()
     # Get schedule based on student's selected time options
@@ -610,7 +617,14 @@ def get_subject_time_options(subject_code: str):
 @app.get("/api/schedule/selections", tags=["schedule"])
 def get_schedule_selections(authorization: Optional[str] = Header(None)):
     """Get student's current schedule time slot selections"""
-    student_id = get_student_from_token(authorization)
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = get_connection()
     result = conn.execute("""
@@ -638,7 +652,14 @@ def get_schedule_selections(authorization: Optional[str] = Header(None)):
 @app.post("/api/schedule/update", tags=["schedule"])
 def update_schedule_selection(request: ScheduleSelectionRequest, authorization: Optional[str] = Header(None)):
     """Update student's time slot selection for a subject"""
-    student_id = get_student_from_token(authorization)
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student_id = verify_token(token)
+    
+    if not student_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = get_connection()
     
