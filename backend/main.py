@@ -333,19 +333,44 @@ def hash_password(password: str) -> str:
 def create_session_token() -> str:
     return secrets.token_urlsafe(32)
 
-def verify_token(token: Optional[str]) -> Optional[int]:
-    """Verify session token and return student_id if valid"""
+def verify_token(token: Optional[str]) -> Optional[Dict]:
+    """Verify session token and return student info if valid"""
     if not token:
         return None
     
     conn = get_connection()
-    result = conn.execute("""
+    session = conn.execute("""
         SELECT student_id FROM sessions 
         WHERE token = ? AND expires_at > now()
     """, [token]).fetchone()
+    
+    if not session:
+        conn.close()
+        return None
+    
+    student_id = session[0]
+    
+    # Get full student info
+    student = conn.execute("""
+        SELECT id, first_name, last_name, email, student_id, year, program, gpa, role
+        FROM students WHERE id = ?
+    """, [student_id]).fetchone()
     conn.close()
     
-    return result[0] if result else None
+    if not student:
+        return None
+    
+    return {
+        "id": student[0],
+        "firstName": student[1],
+        "lastName": student[2],
+        "email": student[3],
+        "studentId": student[4],
+        "year": student[5],
+        "program": student[6],
+        "gpa": student[7],
+        "role": student[8] if len(student) > 8 else "student"
+    }
 
 # ====== AUTH ENDPOINTS ======
 @app.post("/api/auth/register", response_model=AuthResponse, tags=["auth"])
@@ -916,7 +941,14 @@ def get_available_theses(
 @app.get("/api/thesis/my-thesis", response_model=Optional[Thesis], tags=["thesis"])
 def get_my_thesis(authorization: str = Header(None)):
     """Get the thesis assigned to the current student"""
-    student = verify_token(authorization)
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student = verify_token(token)
+    
+    if not student:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = get_connection()
     result = conn.execute("""
@@ -954,7 +986,14 @@ def get_my_thesis(authorization: str = Header(None)):
 @app.post("/api/thesis/assign", tags=["thesis"])
 def assign_thesis(request: AssignThesisRequest, authorization: str = Header(None)):
     """Student assigns a thesis to themselves"""
-    student = verify_token(authorization)
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    student = verify_token(token)
+    
+    if not student:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     conn = get_connection()
     
