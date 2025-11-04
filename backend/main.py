@@ -47,6 +47,25 @@ class ScheduleSelectionRequest(BaseModel):
     subject_code: str
     time_option_ids: List[int]
 
+class CreateSubjectRequest(BaseModel):
+    code: str
+    name: str
+    credits: int
+    semester: str
+    lecturer: str
+    description: str
+    year: int
+    
+class CreateTimeOptionRequest(BaseModel):
+    subject_code: str
+    option_name: str
+    day: str
+    time: str
+    room: str
+    type: str  # "Lecture" or "Lab"
+    lecturer: str
+    capacity: int
+
 # ====== MODELS ======
 class Grade(BaseModel):
     id: int
@@ -1806,6 +1825,136 @@ def assign_grade(
     conn.close()
     
     return {"message": "Grade assigned successfully", "id": new_id}
+
+@app.post("/api/teacher/subject/create", tags=["teacher"])
+def create_subject(
+    req: CreateSubjectRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """Create a new subject (teacher only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    teacher_id = verify_token(token)
+    
+    if not teacher_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Check if user is teacher
+    conn = get_connection()
+    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
+    
+    if not user_role or user_role[0] != 'teacher':
+        conn.close()
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    # Check if subject code already exists
+    existing = conn.execute("SELECT id FROM subjects WHERE code = ?", [req.code]).fetchone()
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Subject code already exists")
+    
+    # Get next id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM subjects").fetchone()[0]
+    new_id = max_id + 1
+    
+    # Default schedule text (can be updated with time options)
+    schedule = f"{req.semester} term"
+    
+    conn.execute("""
+        INSERT INTO subjects (id, code, name, credits, semester, enrolled, students, lecturer, schedule, description, year)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [new_id, req.code, req.name, req.credits, req.semester, False, 0, req.lecturer, schedule, req.description, req.year])
+    
+    conn.close()
+    
+    return {"message": "Subject created successfully", "id": new_id, "code": req.code}
+
+@app.post("/api/teacher/subject/time-option/create", tags=["teacher"])
+def create_time_option(
+    req: CreateTimeOptionRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """Create a new time option for a subject (teacher only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    teacher_id = verify_token(token)
+    
+    if not teacher_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Check if user is teacher
+    conn = get_connection()
+    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
+    
+    if not user_role or user_role[0] != 'teacher':
+        conn.close()
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    # Check if subject exists
+    subject = conn.execute("SELECT id FROM subjects WHERE code = ?", [req.subject_code]).fetchone()
+    if not subject:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    # Get next id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM subject_time_options").fetchone()[0]
+    new_id = max_id + 1
+    
+    conn.execute("""
+        INSERT INTO subject_time_options (id, subject_code, option_name, day, time, room, type, lecturer, capacity, enrolled)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [new_id, req.subject_code, req.option_name, req.day, req.time, req.room, req.type, req.lecturer, req.capacity, 0])
+    
+    conn.close()
+    
+    return {"message": "Time option created successfully", "id": new_id}
+
+@app.put("/api/teacher/subject/{subject_id}", tags=["teacher"])
+def update_subject(
+    subject_id: int,
+    req: CreateSubjectRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """Update an existing subject (teacher only)"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.replace("Bearer ", "")
+    teacher_id = verify_token(token)
+    
+    if not teacher_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Check if user is teacher
+    conn = get_connection()
+    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
+    
+    if not user_role or user_role[0] != 'teacher':
+        conn.close()
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    # Check if subject exists
+    existing = conn.execute("SELECT id FROM subjects WHERE id = ?", [subject_id]).fetchone()
+    if not existing:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    schedule = f"{req.semester} term"
+    
+    conn.execute("""
+        UPDATE subjects 
+        SET code = ?, name = ?, credits = ?, semester = ?, lecturer = ?, 
+            schedule = ?, description = ?, year = ?
+        WHERE id = ?
+    """, [req.code, req.name, req.credits, req.semester, req.lecturer, schedule, req.description, req.year, subject_id])
+    
+    conn.close()
+    
+    return {"message": "Subject updated successfully"}
 
 # ====== STUDENT ACTION ENDPOINTS ======
 @app.post("/api/enrolment/enroll", tags=["enrolment"])
