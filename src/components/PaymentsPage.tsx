@@ -42,9 +42,12 @@ export function PaymentsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    
     Promise.all([
-      fetch(`${API_BASE}/api/payments`).then(res => res.json()),
-      fetch(`${API_BASE}/api/payments/balance`).then(res => res.json()),
+      fetch(`${API_BASE}/api/payments`, { headers }).then(res => res.json()),
+      fetch(`${API_BASE}/api/payments/balance`, { headers }).then(res => res.json()),
     ])
       .then(([paymentsData, balanceData]) => {
         setPayments(paymentsData);
@@ -245,7 +248,7 @@ export function PaymentsPage() {
         <CardContent>
           <div className="space-y-3">
             {paymentHistory.map((payment, index) => {
-              const Icon = payment.icon;
+              const Icon = getIcon(payment.icon);
               return (
                 <div key={payment.id}>
                   <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">

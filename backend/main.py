@@ -1480,12 +1480,13 @@ def update_dormitory(dormitory_id: int, request: UpdateDormitoryRequest, authori
 
 # ====== PAYMENTS ENDPOINTS ======
 @app.get("/api/payments", response_model=List[Payment], tags=["payments"])
-def list_payments():
+def list_payments(authorization: str = Header(None)):
+    student_id = verify_token(authorization)
     conn = get_connection()
     result = conn.execute("""
         SELECT id, type, description, amount, date, due_date, status, method, invoice, icon
         FROM payments
-        WHERE student_id = 1
+        WHERE student_id = ?
         ORDER BY 
             CASE 
                 WHEN status = 'pending' THEN 1
@@ -1496,7 +1497,7 @@ def list_payments():
                 WHEN date != '' THEN date
                 ELSE '9999-99-99'
             END DESC
-    """).fetchall()
+    """, [student_id]).fetchall()
     conn.close()
     
     return [
@@ -1516,13 +1517,14 @@ def list_payments():
     ]
 
 @app.get("/api/payments/balance", tags=["payments"])
-def get_payment_balance():
+def get_payment_balance(authorization: str = Header(None)):
+    student_id = verify_token(authorization)
     conn = get_connection()
     result = conn.execute("""
         SELECT SUM(CASE WHEN status = 'pending' THEN -amount ELSE 0 END) as balance
         FROM payments
-        WHERE student_id = 1
-    """).fetchone()
+        WHERE student_id = ?
+    """, [student_id]).fetchone()
     conn.close()
     
     return {
