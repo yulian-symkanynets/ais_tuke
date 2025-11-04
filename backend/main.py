@@ -166,8 +166,16 @@ class Dormitory(BaseModel):
     amenities: List[str]
     rent: str
     available: bool
+    description: Optional[str] = None
+    roomTypes: Optional[str] = None
+    capacity: Optional[int] = None
+    managerName: Optional[str] = None
+    managerEmail: Optional[str] = None
+    managerPhone: Optional[str] = None
 
 class DormitoryApplication(BaseModel):
+    id: Optional[int] = None
+    dormitoryId: Optional[int] = None
     dormitory: str
     room: str
     roomType: str
@@ -176,6 +184,46 @@ class DormitoryApplication(BaseModel):
     moveInDate: str
     rent: str
     deposit: str
+    appliedDate: Optional[str] = None
+    notes: Optional[str] = None
+
+class DormitoryDocument(BaseModel):
+    id: int
+    name: str
+    type: str
+    size: str
+    uploaded: str
+    uploadedBy: Optional[int] = None
+    fileUrl: Optional[str] = None
+
+class CreateDormitoryRequest(BaseModel):
+    name: str
+    address: str
+    distance: str
+    rooms: int
+    rent: str
+    description: str
+    roomTypes: str
+    capacity: int
+    managerName: str
+    managerEmail: str
+    managerPhone: str
+    amenities: List[str]
+
+class UpdateDormitoryRequest(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    distance: Optional[str] = None
+    rooms: Optional[int] = None
+    rent: Optional[str] = None
+    description: Optional[str] = None
+    roomTypes: Optional[str] = None
+    capacity: Optional[int] = None
+    managerName: Optional[str] = None
+    managerEmail: Optional[str] = None
+    managerPhone: Optional[str] = None
+    amenities: Optional[List[str]] = None
+    available: Optional[bool] = None
 
 class Payment(BaseModel):
     id: int
@@ -1098,14 +1146,34 @@ def upload_document(thesis_id: int, request: UploadDocumentRequest, authorizatio
     return {"message": "Document uploaded successfully", "document_id": new_id, "file_url": file_url}
 
 # ====== DORMITORY ENDPOINTS ======
-@app.get("/api/dormitory/list", response_model=List[Dormitory], tags=["dormitory"])
-def list_dormitories():
+
+# List all dormitories with optional search and filters
+@app.get("/api/dormitory/available", response_model=List[Dormitory], tags=["dormitory"])
+def list_available_dormitories(
+    search: Optional[str] = Query(None),
+    available_only: Optional[bool] = Query(True)
+):
+    """Get list of available dormitories with search and filters"""
     conn = get_connection()
-    result = conn.execute("""
-        SELECT id, name, address, distance, rooms, rent, available
+    
+    query = """
+        SELECT id, name, address, distance, rooms, rent, available, description, room_types, capacity, manager_name, manager_email, manager_phone
         FROM dormitories
-        ORDER BY available DESC, name
-    """).fetchall()
+        WHERE 1=1
+    """
+    params = []
+    
+    if available_only:
+        query += " AND available = TRUE"
+    
+    if search:
+        query += " AND (LOWER(name) LIKE ? OR LOWER(address) LIKE ? OR LOWER(description) LIKE ?)"
+        search_param = f"%{search.lower()}%"
+        params.extend([search_param, search_param, search_param])
+    
+    query += " ORDER BY available DESC, name"
+    
+    result = conn.execute(query, params).fetchall()
     
     dormitories = []
     for row in result:
@@ -1123,16 +1191,23 @@ def list_dormitories():
                 rooms=row[4],
                 amenities=amenities,
                 rent=row[5],
-                available=row[6]
+                available=row[6],
+                description=row[7],
+                roomTypes=row[8],
+                capacity=row[9],
+                managerName=row[10],
+                managerEmail=row[11],
+                managerPhone=row[12]
             )
         )
     
     conn.close()
     return dormitories
 
-@app.get("/api/dormitory/application", response_model=DormitoryApplication, tags=["dormitory"])
-def get_dormitory_application(authorization: Optional[str] = Header(None)):
-    """Get dormitory application for authenticated student"""
+# Get student's current application
+@app.get("/api/dormitory/my-application", response_model=DormitoryApplication, tags=["dormitory"])
+def get_my_application(authorization: Optional[str] = Header(None)):
+    """Get student's dormitory application"""
     if not authorization:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
@@ -1144,9 +1219,10 @@ def get_dormitory_application(authorization: Optional[str] = Header(None)):
     
     conn = get_connection()
     result = conn.execute("""
-        SELECT dormitory, room, room_type, floor, status, move_in_date, rent, deposit
+        SELECT id, dormitory_id, dormitory, room, room_type, floor, status, move_in_date, rent, deposit, applied_date, notes
         FROM dormitory_applications
         WHERE student_id = ?
+        ORDER BY id DESC
         LIMIT 1
     """, [student_id]).fetchone()
     conn.close()
@@ -1155,15 +1231,233 @@ def get_dormitory_application(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=404, detail="No dormitory application found")
     
     return DormitoryApplication(
-        dormitory=result[0],
-        room=result[1],
-        roomType=result[2],
-        floor=result[3],
-        status=result[4],
-        moveInDate=result[5],
-        rent=result[6],
-        deposit=result[7]
+        id=result[0],
+        dormitoryId=result[1],
+        dormitory=result[2],
+        room=result[3],
+        roomType=result[4],
+        floor=result[5],
+        status=result[6],
+        moveInDate=result[7],
+        rent=result[8],
+        deposit=result[9],
+        appliedDate=result[10],
+        notes=result[11]
     )
+
+# Backward compatible endpoint
+@app.get("/api/dormitory/application", response_model=DormitoryApplication, tags=["dormitory"])
+def get_dormitory_application(authorization: Optional[str] = Header(None)):
+    """Get dormitory application (alias for my-application)"""
+    return get_my_application(authorization)
+
+# List all dormitories (backward compatible)
+@app.get("/api/dormitory/list", response_model=List[Dormitory], tags=["dormitory"])
+def list_dormitories():
+    """Get list of all dormitories"""
+    return list_available_dormitories(search=None, available_only=False)
+
+# Get documents for an application
+@app.get("/api/dormitory/application/{application_id}/documents", response_model=List[DormitoryDocument], tags=["dormitory"])
+def get_dormitory_documents(application_id: int, authorization: str = Header(None)):
+    """Get documents for a dormitory application"""
+    student = verify_token(authorization)
+    
+    conn = get_connection()
+    
+    # Verify application belongs to student
+    app = conn.execute("""
+        SELECT student_id FROM dormitory_applications WHERE id = ?
+    """, [application_id]).fetchone()
+    
+    if not app:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    if app[0] != student['id']:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    result = conn.execute("""
+        SELECT id, name, type, size, uploaded, uploaded_by, file_url
+        FROM dormitory_documents
+        WHERE application_id = ?
+        ORDER BY uploaded DESC
+    """, [application_id]).fetchall()
+    
+    conn.close()
+    
+    return [
+        DormitoryDocument(
+            id=row[0],
+            name=row[1],
+            type=row[2],
+            size=row[3],
+            uploaded=row[4],
+            uploadedBy=row[5],
+            fileUrl=row[6]
+        )
+        for row in result
+    ]
+
+# Upload document to application
+@app.post("/api/dormitory/application/{application_id}/upload", tags=["dormitory"])
+def upload_dormitory_document(
+    application_id: int,
+    name: str,
+    doc_type: str,
+    size: str,
+    authorization: str = Header(None)
+):
+    """Upload a document to dormitory application"""
+    student = verify_token(authorization)
+    
+    conn = get_connection()
+    
+    # Verify application belongs to student
+    app = conn.execute("""
+        SELECT student_id FROM dormitory_applications WHERE id = ?
+    """, [application_id]).fetchone()
+    
+    if not app:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    if app[0] != student['id']:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Get max document id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM dormitory_documents").fetchone()[0]
+    new_id = max_id + 1
+    
+    from datetime import datetime
+    uploaded_date = datetime.now().strftime('%b %d, %Y')
+    file_url = f"/files/dorm_{application_id}_{new_id}_{name}"
+    
+    conn.execute("""
+        INSERT INTO dormitory_documents (id, application_id, name, type, size, uploaded, uploaded_by, file_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, [new_id, application_id, name, doc_type, size, uploaded_date, student['id'], file_url])
+    
+    conn.close()
+    
+    return {"message": "Document uploaded successfully", "document_id": new_id, "file_url": file_url}
+
+# Create new dormitory (teacher only)
+@app.post("/api/dormitory/create", tags=["dormitory"])
+def create_dormitory(request: CreateDormitoryRequest, authorization: str = Header(None)):
+    """Create a new dormitory (teacher only)"""
+    student = verify_token(authorization)
+    
+    if student.get('role') != 'teacher':
+        raise HTTPException(status_code=403, detail="Only teachers can create dormitories")
+    
+    conn = get_connection()
+    
+    # Get max dormitory id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM dormitories").fetchone()[0]
+    new_id = max_id + 1
+    
+    from datetime import datetime
+    created_at = datetime.now().isoformat()
+    
+    conn.execute("""
+        INSERT INTO dormitories (id, name, address, distance, rooms, rent, available, description, room_types, capacity, manager_name, manager_email, manager_phone, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [new_id, request.name, request.address, request.distance, request.rooms, request.rent, request.description, request.roomTypes, request.capacity, request.managerName, request.managerEmail, request.managerPhone, student['id'], created_at])
+    
+    # Insert amenities
+    max_amenity_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM dormitory_amenities").fetchone()[0]
+    for i, amenity in enumerate(request.amenities):
+        conn.execute("""
+            INSERT INTO dormitory_amenities (id, dormitory_id, amenity)
+            VALUES (?, ?, ?)
+        """, [max_amenity_id + i + 1, new_id, amenity])
+    
+    conn.close()
+    
+    return {"message": "Dormitory created successfully", "dormitory_id": new_id}
+
+# Update dormitory (teacher only)
+@app.put("/api/dormitory/{dormitory_id}", tags=["dormitory"])
+def update_dormitory(dormitory_id: int, request: UpdateDormitoryRequest, authorization: str = Header(None)):
+    """Update dormitory information (teacher only)"""
+    student = verify_token(authorization)
+    
+    if student.get('role') != 'teacher':
+        raise HTTPException(status_code=403, detail="Only teachers can update dormitories")
+    
+    conn = get_connection()
+    
+    # Check if dormitory exists
+    existing = conn.execute("SELECT id FROM dormitories WHERE id = ?", [dormitory_id]).fetchone()
+    if not existing:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Dormitory not found")
+    
+    # Build update query dynamically
+    updates = []
+    params = []
+    
+    if request.name is not None:
+        updates.append("name = ?")
+        params.append(request.name)
+    if request.address is not None:
+        updates.append("address = ?")
+        params.append(request.address)
+    if request.distance is not None:
+        updates.append("distance = ?")
+        params.append(request.distance)
+    if request.rooms is not None:
+        updates.append("rooms = ?")
+        params.append(request.rooms)
+    if request.rent is not None:
+        updates.append("rent = ?")
+        params.append(request.rent)
+    if request.description is not None:
+        updates.append("description = ?")
+        params.append(request.description)
+    if request.roomTypes is not None:
+        updates.append("room_types = ?")
+        params.append(request.roomTypes)
+    if request.capacity is not None:
+        updates.append("capacity = ?")
+        params.append(request.capacity)
+    if request.managerName is not None:
+        updates.append("manager_name = ?")
+        params.append(request.managerName)
+    if request.managerEmail is not None:
+        updates.append("manager_email = ?")
+        params.append(request.managerEmail)
+    if request.managerPhone is not None:
+        updates.append("manager_phone = ?")
+        params.append(request.managerPhone)
+    if request.available is not None:
+        updates.append("available = ?")
+        params.append(request.available)
+    
+    if updates:
+        params.append(dormitory_id)
+        query = f"UPDATE dormitories SET {', '.join(updates)} WHERE id = ?"
+        conn.execute(query, params)
+    
+    # Update amenities if provided
+    if request.amenities is not None:
+        # Delete existing amenities
+        conn.execute("DELETE FROM dormitory_amenities WHERE dormitory_id = ?", [dormitory_id])
+        
+        # Insert new amenities
+        max_amenity_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM dormitory_amenities").fetchone()[0]
+        for i, amenity in enumerate(request.amenities):
+            conn.execute("""
+                INSERT INTO dormitory_amenities (id, dormitory_id, amenity)
+                VALUES (?, ?, ?)
+            """, [max_amenity_id + i + 1, dormitory_id, amenity])
+    
+    conn.close()
+    
+    return {"message": "Dormitory updated successfully"}
 
 # ====== PAYMENTS ENDPOINTS ======
 @app.get("/api/payments", response_model=List[Payment], tags=["payments"])
@@ -1620,17 +1914,26 @@ def apply_dormitory(
     
     from datetime import datetime
     move_in = (datetime.now() + timedelta(days=30)).strftime("%B %d, %Y")
+    applied_date = datetime.now().isoformat()
     
     # Generate room number
     import random
     floor = random.randint(1, 5)
     room_num = f"{chr(65 + random.randint(0, 3))}-{random.randint(100, 599)}"
     
+    # Calculate deposit (usually double the rent)
+    rent_value = dorm[1].replace("€", "").replace("/month", "").strip()
+    try:
+        deposit_value = int(rent_value) * 2
+        deposit = f"€{deposit_value}"
+    except:
+        deposit = dorm[1].replace("/month", "")
+    
     conn.execute("""
         INSERT INTO dormitory_applications 
-        (id, student_id, dormitory, room, room_type, floor, status, move_in_date, rent, deposit)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
-    """, [new_id, student_id, dorm[0], room_num, req.room_type, floor, move_in, dorm[1], dorm[1].replace("€", "€2")])
+        (id, student_id, dormitory_id, dormitory, room, room_type, floor, status, move_in_date, rent, deposit, applied_date, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, 'Application submitted. Awaiting approval.')
+    """, [new_id, student_id, req.dormitory_id, dorm[0], room_num, req.room_type, floor, move_in, dorm[1], deposit, applied_date])
     
     conn.close()
     

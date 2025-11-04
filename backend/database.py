@@ -168,7 +168,16 @@ def init_database():
             distance VARCHAR,
             rooms INTEGER,
             rent VARCHAR,
-            available BOOLEAN
+            available BOOLEAN,
+            description VARCHAR,
+            room_types VARCHAR,
+            capacity INTEGER,
+            manager_name VARCHAR,
+            manager_email VARCHAR,
+            manager_phone VARCHAR,
+            created_by INTEGER,
+            created_at TIMESTAMP,
+            FOREIGN KEY (created_by) REFERENCES students(id)
         )
     """)
     
@@ -185,6 +194,7 @@ def init_database():
         CREATE TABLE IF NOT EXISTS dormitory_applications (
             id INTEGER PRIMARY KEY,
             student_id INTEGER,
+            dormitory_id INTEGER,
             dormitory VARCHAR,
             room VARCHAR,
             room_type VARCHAR,
@@ -193,7 +203,25 @@ def init_database():
             move_in_date VARCHAR,
             rent VARCHAR,
             deposit VARCHAR,
-            FOREIGN KEY (student_id) REFERENCES students(id)
+            applied_date TIMESTAMP,
+            notes VARCHAR,
+            FOREIGN KEY (student_id) REFERENCES students(id),
+            FOREIGN KEY (dormitory_id) REFERENCES dormitories(id)
+        )
+    """)
+    
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dormitory_documents (
+            id INTEGER PRIMARY KEY,
+            application_id INTEGER,
+            name VARCHAR,
+            type VARCHAR,
+            size VARCHAR,
+            uploaded VARCHAR,
+            uploaded_by INTEGER,
+            file_url VARCHAR,
+            FOREIGN KEY (application_id) REFERENCES dormitory_applications(id),
+            FOREIGN KEY (uploaded_by) REFERENCES students(id)
         )
     """)
     
@@ -437,16 +465,27 @@ def seed_data(conn):
     for doc in documents_data:
         conn.execute("INSERT INTO thesis_documents VALUES (?, ?, ?, ?, ?, ?, ?)", doc)
     
-    # Insert dormitories
+    # Insert dormitories (id, name, address, distance, rooms, rent, available, description, room_types, capacity, manager_name, manager_email, manager_phone, created_by, created_at)
     dormitories_data = [
-        (1, 'Jedlíkova Dormitory', 'Jedlíkova 2, 042 00 Košice', '5 min walk', 45, '€120/month', True),
-        (2, 'Park Dormitory', 'Park Komenského 1, 042 00 Košice', '8 min walk', 12, '€150/month', True),
-        (3, 'Medická Dormitory', 'Medická 2, 040 01 Košice', '12 min walk', 0, '€110/month', False),
-        (4, 'VŠ Campus Dormitory', 'Boženy Němcovej 3, 040 01 Košice', '15 min walk', 23, '€135/month', True),
+        (1, 'Jedlíkova Dormitory', 'Jedlíkova 2, 042 00 Košice', '5 min walk', 45, '€120/month', True,
+         'Modern student dormitory located near the main campus. Features renovated rooms with private bathrooms, high-speed WiFi, shared kitchens on each floor, study rooms, and laundry facilities. 24/7 security and reception service.',
+         'Single Room,Double Room,Triple Room', 180, 'Martin Novák', 'martin.novak@tuke.sk', '+421 55 602 4123', 2, '2024-01-15 10:00:00'),
+        
+        (2, 'Park Dormitory', 'Park Komenského 1, 042 00 Košice', '8 min walk', 12, '€150/month', True,
+         'Premium dormitory with excellent facilities including a gym, underground parking, and modern common areas. All rooms have private bathrooms and balconies. Perfect for students who value comfort and convenience.',
+         'Single Room,Double Room', 48, 'Eva Horváthová', 'eva.horvathova@tuke.sk', '+421 55 602 4156', 2, '2024-02-10 14:30:00'),
+        
+        (3, 'Medická Dormitory', 'Medická 2, 040 01 Košice', '12 min walk', 0, '€110/month', False,
+         'Traditional student dormitory currently undergoing major renovations. Expected to reopen in Spring 2026 with completely renovated rooms, new furniture, and improved facilities. Will offer the most affordable accommodation option.',
+         'Double Room,Triple Room', 120, 'Peter Kováč', 'peter.kovac@tuke.sk', '+421 55 602 4189', 2, '2023-11-20 09:15:00'),
+        
+        (4, 'VŠ Campus Dormitory', 'Boženy Němcovej 3, 040 01 Košice', '15 min walk', 23, '€135/month', True,
+         'Large campus dormitory complex with extensive amenities including cafeteria, sports hall, study rooms, and social spaces. Well-connected to public transport. Popular among international students for its vibrant community atmosphere.',
+         'Single Room,Double Room,Triple Room', 300, 'Jana Šimková', 'jana.simkova@tuke.sk', '+421 55 602 4201', 2, '2024-03-05 11:45:00'),
     ]
     
     for dorm in dormitories_data:
-        conn.execute("INSERT INTO dormitories VALUES (?, ?, ?, ?, ?, ?, ?)", dorm)
+        conn.execute("INSERT INTO dormitories VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", dorm)
     
     # Insert dormitory amenities
     amenities_data = [
@@ -459,12 +498,23 @@ def seed_data(conn):
     for amenity in amenities_data:
         conn.execute("INSERT INTO dormitory_amenities VALUES (?, ?, ?)", amenity)
     
-    # Insert dormitory application
+    # Insert dormitory application (id, student_id, dormitory_id, dormitory, room, room_type, floor, status, move_in_date, rent, deposit, applied_date, notes)
     conn.execute("""
-        INSERT INTO dormitory_applications VALUES (1, 1, 'Jedlíkova Dormitory', 'B-312',
+        INSERT INTO dormitory_applications VALUES (1, 1, 1, 'Jedlíkova Dormitory', 'B-312',
                                                    'Double Room', 3, 'Approved',
-                                                   'September 15, 2025', '€120/month', '€240')
+                                                   'September 15, 2025', '€120/month', '€240',
+                                                   '2025-07-10 09:30:00', 'Application approved. Contract signed.')
     """)
+    
+    # Insert dormitory documents (id, application_id, name, type, size, uploaded, uploaded_by, file_url)
+    dormitory_docs = [
+        (1, 1, 'Housing Contract.pdf', 'Contract', '156 KB', 'Jul 15, 2025', 1, '/files/dorm_contract.pdf'),
+        (2, 1, 'Student ID Copy.pdf', 'ID Document', '89 KB', 'Jul 10, 2025', 1, '/files/student_id.pdf'),
+        (3, 1, 'Health Insurance.pdf', 'Insurance', '245 KB', 'Jul 10, 2025', 1, '/files/health_insurance.pdf'),
+    ]
+    
+    for doc in dormitory_docs:
+        conn.execute("INSERT INTO dormitory_documents VALUES (?, ?, ?, ?, ?, ?, ?, ?)", doc)
     
     # Insert payments
     payments_data = [
