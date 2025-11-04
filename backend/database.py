@@ -119,13 +119,18 @@ def init_database():
             type VARCHAR,
             status VARCHAR,
             supervisor VARCHAR,
+            supervisor_email VARCHAR,
             consultant VARCHAR,
             department VARCHAR,
+            description VARCHAR,
             start_date VARCHAR,
             submission_deadline VARCHAR,
             defense_date VARCHAR,
             progress INTEGER,
-            FOREIGN KEY (student_id) REFERENCES students(id)
+            created_by INTEGER,
+            is_available BOOLEAN DEFAULT TRUE,
+            FOREIGN KEY (student_id) REFERENCES students(id),
+            FOREIGN KEY (created_by) REFERENCES students(id)
         )
     """)
     
@@ -148,7 +153,10 @@ def init_database():
             name VARCHAR,
             size VARCHAR,
             uploaded VARCHAR,
-            FOREIGN KEY (thesis_id) REFERENCES thesis(id)
+            uploaded_by INTEGER,
+            file_url VARCHAR,
+            FOREIGN KEY (thesis_id) REFERENCES thesis(id),
+            FOREIGN KEY (uploaded_by) REFERENCES students(id)
         )
     """)
     
@@ -357,13 +365,53 @@ def seed_data(conn):
     for enr in enrolled_data:
         conn.execute("INSERT INTO enrolled_subjects VALUES (?, ?, ?, ?, ?, ?, ?)", enr)
     
-    # Insert thesis
-    conn.execute("""
-        INSERT INTO thesis VALUES (1, 1, 'Application of Machine Learning in Web Security Analysis',
-                                   'Bachelor Thesis', 'In Progress', 'Prof. Dr. Michael Brown',
-                                   'Dr. Anna Johnson', 'Department of Computers and Informatics',
-                                   'September 1, 2025', 'May 15, 2026', 'June 20, 2026', 45)
-    """)
+    # Insert thesis (id, student_id, title, type, status, supervisor, supervisor_email, consultant, department, description, start_date, submission_deadline, defense_date, progress, created_by, is_available)
+    thesis_data = [
+        # Assigned thesis (student 1)
+        (1, 1, 'Application of Machine Learning in Web Security Analysis', 'Bachelor Thesis', 'In Progress', 
+         'Prof. Dr. Michael Brown', 'michael.brown@tuke.sk', 'Dr. Anna Johnson', 'Department of Computers and Informatics',
+         'This thesis focuses on applying machine learning algorithms to detect and prevent web security vulnerabilities. The research includes analysis of common attacks such as SQL injection, XSS, and CSRF, and proposes ML-based detection mechanisms.',
+         'September 1, 2025', 'May 15, 2026', 'June 20, 2026', 45, 2, False),
+        
+        # Available theses created by teacher (student_id=2 is teacher)
+        (2, None, 'Blockchain Technology in Supply Chain Management', 'Bachelor Thesis', 'Available',
+         'Prof. Dr. Michael Brown', 'michael.brown@tuke.sk', None, 'Department of Computers and Informatics',
+         'Research and implement blockchain-based solutions for improving transparency and traceability in supply chain management. The work will include a prototype implementation and performance analysis.',
+         None, None, None, 0, 2, True),
+         
+        (3, None, 'Deep Learning for Medical Image Analysis', 'Master Thesis', 'Available',
+         'Dr. Anna Johnson', 'anna.johnson@tuke.sk', 'Prof. Dr. Michael Brown', 'Department of Computers and Informatics',
+         'Develop deep learning models for automated analysis of medical images (X-rays, MRI, CT scans). Focus on disease detection and classification using convolutional neural networks.',
+         None, None, None, 0, 2, True),
+         
+        (4, None, 'IoT Security: Vulnerabilities and Solutions', 'Bachelor Thesis', 'Available',
+         'Dr. Robert Garcia', 'robert.garcia@tuke.sk', None, 'Department of Computers and Informatics',
+         'Comprehensive study of security vulnerabilities in IoT devices and networks. Propose and implement security measures to protect IoT ecosystems from common attacks.',
+         None, None, None, 0, 2, True),
+         
+        (5, None, 'Natural Language Processing for Slovak Language', 'Master Thesis', 'Available',
+         'Prof. David Lee', 'david.lee@tuke.sk', 'Dr. Emily Davis', 'Department of Computers and Informatics',
+         'Develop NLP tools and models specifically for the Slovak language, including sentiment analysis, named entity recognition, and machine translation improvements.',
+         None, None, None, 0, 2, True),
+         
+        (6, None, 'Augmented Reality in Education', 'Bachelor Thesis', 'Available',
+         'Dr. Emily Davis', 'emily.davis@tuke.sk', None, 'Department of Computers and Informatics',
+         'Design and develop AR applications for educational purposes. Evaluate the effectiveness of AR in improving student engagement and learning outcomes.',
+         None, None, None, 0, 2, True),
+         
+        (7, None, 'Cloud-Native Microservices Architecture', 'Master Thesis', 'Available',
+         'Prof. Dr. Michael Brown', 'michael.brown@tuke.sk', 'Dr. Robert Garcia', 'Department of Computers and Informatics',
+         'Design and implement a scalable microservices architecture using cloud-native technologies (Kubernetes, Docker, Service Mesh). Include monitoring and CI/CD pipelines.',
+         None, None, None, 0, 2, True),
+         
+        (8, None, 'AI-Powered Chatbot for Customer Service', 'Bachelor Thesis', 'Available',
+         'Dr. Anna Johnson', 'anna.johnson@tuke.sk', None, 'Department of Computers and Informatics',
+         'Develop an intelligent chatbot using NLP and machine learning for automated customer service. Implement context awareness and continuous learning capabilities.',
+         None, None, None, 0, 2, True),
+    ]
+    
+    for thesis in thesis_data:
+        conn.execute("""INSERT INTO thesis VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", thesis)
     
     # Insert thesis milestones
     milestones_data = [
@@ -378,16 +426,16 @@ def seed_data(conn):
     for milestone in milestones_data:
         conn.execute("INSERT INTO thesis_milestones VALUES (?, ?, ?, ?, ?, ?)", milestone)
     
-    # Insert thesis documents
+    # Insert thesis documents (id, thesis_id, name, size, uploaded, uploaded_by, file_url)
     documents_data = [
-        (1, 1, 'Thesis Template.docx', '245 KB', 'Sep 1, 2025'),
-        (2, 1, 'Literature Review.pdf', '1.2 MB', 'Oct 15, 2025'),
-        (3, 1, 'Research Proposal.pdf', '890 KB', 'Sep 20, 2025'),
-        (4, 1, 'Bibliography.bib', '45 KB', 'Oct 10, 2025'),
+        (1, 1, 'Thesis Template.docx', '245 KB', 'Sep 1, 2025', 1, '/files/thesis_template.docx'),
+        (2, 1, 'Literature Review.pdf', '1.2 MB', 'Oct 15, 2025', 1, '/files/literature_review.pdf'),
+        (3, 1, 'Research Proposal.pdf', '890 KB', 'Sep 20, 2025', 1, '/files/research_proposal.pdf'),
+        (4, 1, 'Bibliography.bib', '45 KB', 'Oct 10, 2025', 1, '/files/bibliography.bib'),
     ]
     
     for doc in documents_data:
-        conn.execute("INSERT INTO thesis_documents VALUES (?, ?, ?, ?, ?)", doc)
+        conn.execute("INSERT INTO thesis_documents VALUES (?, ?, ?, ?, ?, ?, ?)", doc)
     
     # Insert dormitories
     dormitories_data = [

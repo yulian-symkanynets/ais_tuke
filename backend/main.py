@@ -110,16 +110,20 @@ class EnrolledSubject(BaseModel):
 
 class Thesis(BaseModel):
     id: int
+    studentId: Optional[int] = None
     title: str
     type: str
     status: str
     supervisor: str
-    consultant: str
+    supervisorEmail: Optional[str] = None
+    consultant: Optional[str] = None
     department: str
-    startDate: str
-    submissionDeadline: str
-    defenseDate: str
-    progress: int
+    description: Optional[str] = None
+    startDate: Optional[str] = None
+    submissionDeadline: Optional[str] = None
+    defenseDate: Optional[str] = None
+    progress: int = 0
+    isAvailable: bool = False
 
 class ThesisMilestone(BaseModel):
     id: int
@@ -133,6 +137,25 @@ class ThesisDocument(BaseModel):
     name: str
     size: str
     uploaded: str
+    uploadedBy: Optional[int] = None
+    fileUrl: Optional[str] = None
+
+class CreateThesisRequest(BaseModel):
+    title: str
+    type: str
+    supervisor: str
+    supervisorEmail: str
+    consultant: Optional[str] = None
+    department: str
+    description: str
+
+class AssignThesisRequest(BaseModel):
+    thesis_id: int
+
+class UploadDocumentRequest(BaseModel):
+    thesis_id: int
+    name: str
+    size: str
 
 class Dormitory(BaseModel):
     id: int
@@ -755,45 +778,247 @@ def list_enrolled_subjects():
     ]
 
 # ====== THESIS ENDPOINTS ======
-@app.get("/api/thesis", response_model=Thesis, tags=["thesis"])
-def get_thesis():
+
+# Get all available theses (for browsing/searching)
+@app.get("/api/thesis/available", response_model=List[Thesis], tags=["thesis"])
+def get_available_theses(
+    authorization: str = Header(None),
+    search: Optional[str] = Query(None),
+    type: Optional[str] = Query(None),
+    supervisor: Optional[str] = Query(None),
+    department: Optional[str] = Query(None)
+):
+    """Get all available theses for students to browse and assign"""
+    student = verify_token(authorization)
+    
+    conn = get_connection()
+    
+    query = """
+        SELECT id, student_id, title, type, status, supervisor, supervisor_email, 
+               consultant, department, description, start_date, submission_deadline, 
+               defense_date, progress, is_available
+        FROM thesis
+        WHERE is_available = TRUE
+    """
+    params = []
+    
+    if search:
+        query += " AND (LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(supervisor) LIKE ?)"
+        search_term = f"%{search.lower()}%"
+        params.extend([search_term, search_term, search_term])
+    
+    if type:
+        query += " AND type = ?"
+        params.append(type)
+    
+    if supervisor:
+        query += " AND LOWER(supervisor) LIKE ?"
+        params.append(f"%{supervisor.lower()}%")
+    
+    if department:
+        query += " AND LOWER(department) LIKE ?"
+        params.append(f"%{department.lower()}%")
+    
+    query += " ORDER BY id DESC"
+    
+    result = conn.execute(query, params).fetchall()
+    conn.close()
+    
+    return [
+        Thesis(
+            id=row[0],
+            studentId=row[1],
+            title=row[2],
+            type=row[3],
+            status=row[4],
+            supervisor=row[5],
+            supervisorEmail=row[6],
+            consultant=row[7],
+            department=row[8],
+            description=row[9],
+            startDate=row[10],
+            submissionDeadline=row[11],
+            defenseDate=row[12],
+            progress=row[13],
+            isAvailable=row[14]
+        )
+        for row in result
+    ]
+
+# Get student's assigned thesis
+@app.get("/api/thesis/my-thesis", response_model=Optional[Thesis], tags=["thesis"])
+def get_my_thesis(authorization: str = Header(None)):
+    """Get the thesis assigned to the current student"""
+    student = verify_token(authorization)
+    
     conn = get_connection()
     result = conn.execute("""
-        SELECT id, title, type, status, supervisor, consultant, department,
-               start_date, submission_deadline, defense_date, progress
+        SELECT id, student_id, title, type, status, supervisor, supervisor_email,
+               consultant, department, description, start_date, submission_deadline, 
+               defense_date, progress, is_available
         FROM thesis
-        WHERE student_id = 1
+        WHERE student_id = ?
         LIMIT 1
-    """).fetchone()
+    """, [student['id']]).fetchone()
     conn.close()
     
     if not result:
-        raise HTTPException(status_code=404, detail="Thesis not found")
+        return None
     
     return Thesis(
         id=result[0],
-        title=result[1],
-        type=result[2],
-        status=result[3],
-        supervisor=result[4],
-        consultant=result[5],
-        department=result[6],
-        startDate=result[7],
-        submissionDeadline=result[8],
-        defenseDate=result[9],
-        progress=result[10]
+        studentId=result[1],
+        title=result[2],
+        type=result[3],
+        status=result[4],
+        supervisor=result[5],
+        supervisorEmail=result[6],
+        consultant=result[7],
+        department=result[8],
+        description=result[9],
+        startDate=result[10],
+        submissionDeadline=result[11],
+        defenseDate=result[12],
+        progress=result[13],
+        isAvailable=result[14]
     )
 
-@app.get("/api/thesis/milestones", response_model=List[ThesisMilestone], tags=["thesis"])
-def get_thesis_milestones():
+# Assign thesis to student
+@app.post("/api/thesis/assign", tags=["thesis"])
+def assign_thesis(request: AssignThesisRequest, authorization: str = Header(None)):
+    """Student assigns a thesis to themselves"""
+    student = verify_token(authorization)
+    
+    conn = get_connection()
+    
+    # Check if thesis is available
+    thesis_check = conn.execute("""
+        SELECT is_available, student_id FROM thesis WHERE id = ?
+    """, [request.thesis_id]).fetchone()
+    
+    if not thesis_check:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Thesis not found")
+    
+    if not thesis_check[0]:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Thesis is not available")
+    
+    if thesis_check[1] is not None:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Thesis already assigned")
+    
+    # Check if student already has a thesis
+    existing = conn.execute("""
+        SELECT id FROM thesis WHERE student_id = ?
+    """, [student['id']]).fetchone()
+    
+    if existing:
+        conn.close()
+        raise HTTPException(status_code=400, detail="You already have a thesis assigned")
+    
+    # Assign thesis to student
+    from datetime import datetime, timedelta
+    today = datetime.now()
+    submission = (today + timedelta(days=270)).strftime('%B %d, %Y')  # 9 months
+    defense = (today + timedelta(days=300)).strftime('%B %d, %Y')  # 10 months
+    
+    conn.execute("""
+        UPDATE thesis 
+        SET student_id = ?, 
+            status = 'In Progress',
+            is_available = FALSE,
+            start_date = ?,
+            submission_deadline = ?,
+            defense_date = ?
+        WHERE id = ?
+    """, [student['id'], today.strftime('%B %d, %Y'), submission, defense, request.thesis_id])
+    
+    # Create default milestones
+    milestones = [
+        ('Thesis Registration', 'completed', today.strftime('%B %d, %Y'), 'Thesis topic approved and registered'),
+        ('Literature Review', 'in-progress', (today + timedelta(days=45)).strftime('%B %d, %Y'), 'Research and review of relevant literature'),
+        ('Research Methodology', 'pending', (today + timedelta(days=105)).strftime('%B %d, %Y'), 'Define research methods and approach'),
+        ('Implementation', 'pending', (today + timedelta(days=180)).strftime('%B %d, %Y'), 'Develop practical implementation'),
+        ('Final Draft Submission', 'pending', (today + timedelta(days=255)).strftime('%B %d, %Y'), 'Submit complete thesis draft'),
+        ('Thesis Defense', 'pending', defense, 'Oral defense presentation'),
+    ]
+    
+    for idx, milestone in enumerate(milestones, 1):
+        # Get max milestone id
+        max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM thesis_milestones").fetchone()[0]
+        conn.execute("""
+            INSERT INTO thesis_milestones (id, thesis_id, title, status, date, description)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, [max_id + idx, request.thesis_id, milestone[0], milestone[1], milestone[2], milestone[3]])
+    
+    conn.close()
+    
+    return {"message": "Thesis assigned successfully", "thesis_id": request.thesis_id}
+
+# Create new thesis (teacher only)
+@app.post("/api/thesis/create", tags=["thesis"])
+def create_thesis(request: CreateThesisRequest, authorization: str = Header(None)):
+    """Teacher creates a new thesis topic"""
+    student = verify_token(authorization)
+    
+    if student.get('role') != 'teacher':
+        raise HTTPException(status_code=403, detail="Only teachers can create thesis topics")
+    
+    conn = get_connection()
+    
+    # Get max thesis id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM thesis").fetchone()[0]
+    new_id = max_id + 1
+    
+    conn.execute("""
+        INSERT INTO thesis (id, student_id, title, type, status, supervisor, supervisor_email,
+                           consultant, department, description, start_date, submission_deadline,
+                           defense_date, progress, created_by, is_available)
+        VALUES (?, NULL, ?, ?, 'Available', ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, ?, TRUE)
+    """, [new_id, request.title, request.type, request.supervisor, request.supervisorEmail,
+          request.consultant, request.department, request.description, student['id']])
+    
+    conn.close()
+    
+    return {"message": "Thesis created successfully", "thesis_id": new_id}
+
+# Update thesis (teacher only)
+@app.put("/api/thesis/{thesis_id}", tags=["thesis"])
+def update_thesis(thesis_id: int, request: CreateThesisRequest, authorization: str = Header(None)):
+    """Teacher updates thesis information"""
+    student = verify_token(authorization)
+    
+    if student.get('role') != 'teacher':
+        raise HTTPException(status_code=403, detail="Only teachers can update thesis")
+    
+    conn = get_connection()
+    
+    conn.execute("""
+        UPDATE thesis 
+        SET title = ?, type = ?, supervisor = ?, supervisor_email = ?,
+            consultant = ?, department = ?, description = ?
+        WHERE id = ?
+    """, [request.title, request.type, request.supervisor, request.supervisorEmail,
+          request.consultant, request.department, request.description, thesis_id])
+    
+    conn.close()
+    
+    return {"message": "Thesis updated successfully"}
+
+# Get thesis milestones
+@app.get("/api/thesis/{thesis_id}/milestones", response_model=List[ThesisMilestone], tags=["thesis"])
+def get_thesis_milestones(thesis_id: int, authorization: str = Header(None)):
+    """Get milestones for a specific thesis"""
+    student = verify_token(authorization)
+    
     conn = get_connection()
     result = conn.execute("""
         SELECT tm.id, tm.title, tm.status, tm.date, tm.description
         FROM thesis_milestones tm
-        JOIN thesis t ON tm.thesis_id = t.id
-        WHERE t.student_id = 1
+        WHERE tm.thesis_id = ?
         ORDER BY tm.id
-    """).fetchall()
+    """, [thesis_id]).fetchall()
     conn.close()
     
     return [
@@ -807,16 +1032,19 @@ def get_thesis_milestones():
         for row in result
     ]
 
-@app.get("/api/thesis/documents", response_model=List[ThesisDocument], tags=["thesis"])
-def get_thesis_documents():
+# Get thesis documents
+@app.get("/api/thesis/{thesis_id}/documents", response_model=List[ThesisDocument], tags=["thesis"])
+def get_thesis_documents(thesis_id: int, authorization: str = Header(None)):
+    """Get documents for a specific thesis"""
+    student = verify_token(authorization)
+    
     conn = get_connection()
     result = conn.execute("""
-        SELECT td.id, td.name, td.size, td.uploaded
+        SELECT td.id, td.name, td.size, td.uploaded, td.uploaded_by, td.file_url
         FROM thesis_documents td
-        JOIN thesis t ON td.thesis_id = t.id
-        WHERE t.student_id = 1
+        WHERE td.thesis_id = ?
         ORDER BY td.uploaded DESC
-    """).fetchall()
+    """, [thesis_id]).fetchall()
     conn.close()
     
     return [
@@ -824,10 +1052,50 @@ def get_thesis_documents():
             id=row[0],
             name=row[1],
             size=row[2],
-            uploaded=row[3]
+            uploaded=row[3],
+            uploadedBy=row[4],
+            fileUrl=row[5]
         )
         for row in result
     ]
+
+# Upload document
+@app.post("/api/thesis/{thesis_id}/upload", tags=["thesis"])
+def upload_document(thesis_id: int, request: UploadDocumentRequest, authorization: str = Header(None)):
+    """Upload a document to thesis (simulated - returns success)"""
+    student = verify_token(authorization)
+    
+    conn = get_connection()
+    
+    # Verify thesis exists and belongs to student or user is teacher
+    thesis = conn.execute("""
+        SELECT student_id FROM thesis WHERE id = ?
+    """, [thesis_id]).fetchone()
+    
+    if not thesis:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Thesis not found")
+    
+    if thesis[0] != student['id'] and student.get('role') != 'teacher':
+        conn.close()
+        raise HTTPException(status_code=403, detail="Not authorized to upload to this thesis")
+    
+    # Get max document id
+    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM thesis_documents").fetchone()[0]
+    new_id = max_id + 1
+    
+    from datetime import datetime
+    uploaded_date = datetime.now().strftime('%b %d, %Y')
+    file_url = f"/files/thesis_{thesis_id}_{new_id}_{request.name}"
+    
+    conn.execute("""
+        INSERT INTO thesis_documents (id, thesis_id, name, size, uploaded, uploaded_by, file_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, [new_id, thesis_id, request.name, request.size, uploaded_date, student['id'], file_url])
+    
+    conn.close()
+    
+    return {"message": "Document uploaded successfully", "document_id": new_id, "file_url": file_url}
 
 # ====== DORMITORY ENDPOINTS ======
 @app.get("/api/dormitory/list", response_model=List[Dormitory], tags=["dormitory"])
