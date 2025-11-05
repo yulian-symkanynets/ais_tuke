@@ -1066,7 +1066,11 @@ def assign_thesis(request: AssignThesisRequest, authorization: str = Header(None
 @app.post("/api/thesis/create", tags=["thesis"])
 def create_thesis(request: CreateThesisRequest, authorization: str = Header(None)):
     """Teacher creates a new thesis topic"""
-    student = verify_token(authorization)
+    token = authorization.replace("Bearer ", "") if authorization else None
+    student = verify_token(token)
+    
+    if not student:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
     if student.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Only teachers can create thesis topics")
@@ -1093,7 +1097,11 @@ def create_thesis(request: CreateThesisRequest, authorization: str = Header(None
 @app.put("/api/thesis/{thesis_id}", tags=["thesis"])
 def update_thesis(thesis_id: int, request: CreateThesisRequest, authorization: str = Header(None)):
     """Teacher updates thesis information"""
-    student = verify_token(authorization)
+    token = authorization.replace("Bearer ", "") if authorization else None
+    student = verify_token(token)
+    
+    if not student:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
     if student.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Only teachers can update thesis")
@@ -1406,7 +1414,11 @@ def upload_dormitory_document(
 @app.post("/api/dormitory/create", tags=["dormitory"])
 def create_dormitory(request: CreateDormitoryRequest, authorization: str = Header(None)):
     """Create a new dormitory (teacher only)"""
-    student = verify_token(authorization)
+    token = authorization.replace("Bearer ", "") if authorization else None
+    student = verify_token(token)
+    
+    if not student:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
     if student.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Only teachers can create dormitories")
@@ -1441,7 +1453,11 @@ def create_dormitory(request: CreateDormitoryRequest, authorization: str = Heade
 @app.put("/api/dormitory/{dormitory_id}", tags=["dormitory"])
 def update_dormitory(dormitory_id: int, request: UpdateDormitoryRequest, authorization: str = Header(None)):
     """Update dormitory information (teacher only)"""
-    student = verify_token(authorization)
+    token = authorization.replace("Bearer ", "") if authorization else None
+    student = verify_token(token)
+    
+    if not student:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
     if student.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Only teachers can update dormitories")
@@ -1789,22 +1805,16 @@ def create_exam(
     authorization: Optional[str] = Header(None)
 ):
     """Create a new exam (teacher only)"""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "") if authorization else None
+    student = verify_token(token)
     
-    token = authorization.replace("Bearer ", "")
-    student_id = verify_token(token)
+    if not student:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
-    if not student_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    # Check if user is teacher
-    conn = get_connection()
-    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [student_id]).fetchone()
-    
-    if not user_role or user_role[0] != 'teacher':
-        conn.close()
+    if student.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    conn = get_connection()
     
     # Get next exam id
     max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM exams").fetchone()[0]
@@ -1830,22 +1840,16 @@ def assign_grade(
     authorization: Optional[str] = Header(None)
 ):
     """Assign a grade to a student (teacher only)"""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "") if authorization else None
+    teacher = verify_token(token)
     
-    token = authorization.replace("Bearer ", "")
-    teacher_id = verify_token(token)
+    if not teacher:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
-    if not teacher_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    # Check if user is teacher
-    conn = get_connection()
-    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
-    
-    if not user_role or user_role[0] != 'teacher':
-        conn.close()
+    if teacher.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    conn = get_connection()
     
     # Grade to numeric mapping
     grade_map = {"A": 1.0, "B": 1.5, "C": 2.0, "D": 3.0, "E": 4.0, "FX": 5.0}
@@ -1873,22 +1877,16 @@ def create_subject(
     authorization: Optional[str] = Header(None)
 ):
     """Create a new subject (teacher only)"""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "") if authorization else None
+    teacher = verify_token(token)
     
-    token = authorization.replace("Bearer ", "")
-    teacher_id = verify_token(token)
+    if not teacher:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
-    if not teacher_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    # Check if user is teacher
-    conn = get_connection()
-    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
-    
-    if not user_role or user_role[0] != 'teacher':
-        conn.close()
+    if teacher.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    conn = get_connection()
     
     # Check if subject code already exists
     existing = conn.execute("SELECT id FROM subjects WHERE code = ?", [req.code]).fetchone()
@@ -1918,22 +1916,16 @@ def create_time_option(
     authorization: Optional[str] = Header(None)
 ):
     """Create a new time option for a subject (teacher only)"""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "") if authorization else None
+    teacher = verify_token(token)
     
-    token = authorization.replace("Bearer ", "")
-    teacher_id = verify_token(token)
+    if not teacher:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
-    if not teacher_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    # Check if user is teacher
-    conn = get_connection()
-    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
-    
-    if not user_role or user_role[0] != 'teacher':
-        conn.close()
+    if teacher.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    conn = get_connection()
     
     # Check if subject exists
     subject = conn.execute("SELECT id FROM subjects WHERE code = ?", [req.subject_code]).fetchone()
@@ -1961,22 +1953,16 @@ def update_subject(
     authorization: Optional[str] = Header(None)
 ):
     """Update an existing subject (teacher only)"""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "") if authorization else None
+    teacher = verify_token(token)
     
-    token = authorization.replace("Bearer ", "")
-    teacher_id = verify_token(token)
+    if not teacher:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
-    if not teacher_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    # Check if user is teacher
-    conn = get_connection()
-    user_role = conn.execute("SELECT role FROM students WHERE id = ?", [teacher_id]).fetchone()
-    
-    if not user_role or user_role[0] != 'teacher':
-        conn.close()
+    if teacher.get('role') != 'teacher':
         raise HTTPException(status_code=403, detail="Teacher access required")
+    
+    conn = get_connection()
     
     # Check if subject exists
     existing = conn.execute("SELECT id FROM subjects WHERE id = ?", [subject_id]).fetchone()
