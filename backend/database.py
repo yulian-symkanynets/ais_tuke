@@ -350,6 +350,11 @@ def seed_data(conn):
         (8, 'OS', 'Operating Systems', 6, 'Winter', 'Prof. Maria Rodriguez', 'Mon, Wed 13:00-14:40', 95, False, 'OS architecture, process management, memory management, file systems, and concurrency.', 2),
         (9, 'PROG1', 'Programming 1', 6, 'Winter', 'Dr. James Wilson', 'Mon, Wed, Fri 08:00-09:40', 180, False, 'Introduction to programming using Python. Learn variables, loops, functions, and basic algorithms.', 1),
         (10, 'MATH1', 'Mathematics 1', 8, 'Winter', 'Prof. Elena Petrova', 'Tue, Thu 08:00-09:40', 165, False, 'Calculus, linear algebra, and discrete mathematics for computer science students.', 1),
+        (11, 'CYBER', 'Cybersecurity Fundamentals', 6, 'Summer', 'Dr. Robert Garcia', 'Mon, Wed 10:00-11:40', 85, False, 'Network security, cryptography, ethical hacking, and security best practices. Hands-on penetration testing labs.', 3),
+        (12, 'ML', 'Machine Learning', 7, 'Summer', 'Prof. David Lee', 'Tue, Thu 14:00-15:40', 92, False, 'Supervised and unsupervised learning, deep learning, neural networks, and practical ML applications using Python.', 3),
+        (13, 'CLOUD', 'Cloud Computing', 5, 'Summer', 'Dr. Emily Davis', 'Wed, Fri 13:00-14:40', 78, False, 'AWS, Azure, Google Cloud platforms. Learn to deploy scalable applications, manage infrastructure as code.', 3),
+        (14, 'IOT', 'Internet of Things', 5, 'Summer', 'Dr. Anna Johnson', 'Mon, Thu 15:00-16:40', 65, False, 'IoT architecture, sensors, embedded systems, communication protocols. Build connected smart devices.', 2),
+        (15, 'BLOCKCHAIN', 'Blockchain Technology', 6, 'Summer', 'Prof. Michael Brown', 'Tue, Fri 10:00-11:40', 70, False, 'Blockchain fundamentals, smart contracts, cryptocurrency, decentralized applications. Ethereum development.', 3),
     ]
     
     for subj in subjects_data:
@@ -436,6 +441,41 @@ def seed_data(conn):
          'Dr. Anna Johnson', 'anna.johnson@tuke.sk', None, 'Department of Computers and Informatics',
          'Develop an intelligent chatbot using NLP and machine learning for automated customer service. Implement context awareness and continuous learning capabilities.',
          None, None, None, 0, 2, True),
+         
+        (9, None, 'Quantum Computing Algorithms for Optimization Problems', 'Master Thesis', 'Available',
+         'Prof. David Lee', 'david.lee@tuke.sk', 'Dr. Robert Garcia', 'Department of Computers and Informatics',
+         'Explore quantum algorithms for solving complex optimization problems. Compare performance with classical approaches and implement simulations using Qiskit or similar frameworks.',
+         None, None, None, 0, 2, True),
+         
+        (10, None, 'Smart Home Automation with IoT', 'Bachelor Thesis', 'Available',
+         'Dr. Emily Davis', 'emily.davis@tuke.sk', None, 'Department of Computers and Informatics',
+         'Design and build a complete smart home system using IoT devices. Include mobile app control, voice assistant integration, and energy monitoring features.',
+         None, None, None, 0, 2, True),
+         
+        (11, None, 'Cybersecurity in Financial Systems', 'Master Thesis', 'Available',
+         'Prof. Dr. Michael Brown', 'michael.brown@tuke.sk', 'Dr. Anna Johnson', 'Department of Computers and Informatics',
+         'Analyze security threats in modern financial systems including online banking and cryptocurrency. Propose comprehensive security framework and risk mitigation strategies.',
+         None, None, None, 0, 2, True),
+         
+        (12, None, 'Computer Vision for Autonomous Vehicles', 'Master Thesis', 'Available',
+         'Dr. Robert Garcia', 'robert.garcia@tuke.sk', 'Prof. David Lee', 'Department of Computers and Informatics',
+         'Develop computer vision algorithms for object detection, lane keeping, and traffic sign recognition in autonomous vehicles. Real-world testing and validation included.',
+         None, None, None, 0, 2, True),
+         
+        (13, None, 'Mobile Game Development using Unity', 'Bachelor Thesis', 'Available',
+         'Dr. Anna Johnson', 'anna.johnson@tuke.sk', None, 'Department of Computers and Informatics',
+         'Create a complete mobile game with Unity engine. Focus on game mechanics, user experience, monetization strategies, and cross-platform deployment.',
+         None, None, None, 0, 2, True),
+         
+        (14, None, 'Big Data Analytics for Business Intelligence', 'Master Thesis', 'Available',
+         'Prof. David Lee', 'david.lee@tuke.sk', 'Dr. Emily Davis', 'Department of Computers and Informatics',
+         'Implement big data solutions using Hadoop, Spark, and modern BI tools. Analyze real business datasets and create predictive models for decision making.',
+         None, None, None, 0, 2, True),
+         
+        (15, None, 'Ethical Hacking and Penetration Testing', 'Bachelor Thesis', 'Available',
+         'Dr. Robert Garcia', 'robert.garcia@tuke.sk', None, 'Department of Computers and Informatics',
+         'Study ethical hacking techniques and perform penetration testing on sample systems. Document vulnerabilities and provide security recommendations.',
+         None, None, None, 0, 2, True),
     ]
     
     for thesis in thesis_data:
@@ -482,6 +522,22 @@ def seed_data(conn):
         (4, 'VŠ Campus Dormitory', 'Boženy Němcovej 3, 040 01 Košice', '15 min walk', 23, '€135/month', True,
          'Large campus dormitory complex with extensive amenities including cafeteria, sports hall, study rooms, and social spaces. Well-connected to public transport. Popular among international students for its vibrant community atmosphere.',
          'Single Room,Double Room,Triple Room', 300, 'Jana Šimková', 'jana.simkova@tuke.sk', '+421 55 602 4201', 2, '2024-03-05 11:45:00'),
+         
+        (5, 'TechHub Dormitory', 'Letná 9, 042 00 Košice', '10 min walk', 15, '€140/month', True,
+         'Modern tech-focused dormitory with high-speed fiber internet, dedicated study areas with multiple monitors, 3D printing lab, and collaborative workspaces. Ideal for engineering and IT students.',
+         'Single Room,Double Room', 60, 'Tomáš Varga', 'tomas.varga@tuke.sk', '+421 55 602 4234', 2, '2024-04-12 16:20:00'),
+         
+        (6, 'Green Valley Residence', 'Moyzesova 6, 040 01 Košice', '20 min walk', 18, '€125/month', True,
+         'Eco-friendly dormitory with solar panels, rainwater harvesting, and green roofs. Surrounded by gardens and parks. Features outdoor study areas, bicycle storage, and sustainability workshops.',
+         'Single Room,Double Room,Triple Room', 90, 'Lucia Kováčová', 'lucia.kovacova@tuke.sk', '+421 55 602 4267', 2, '2024-05-08 10:30:00'),
+         
+        (7, 'International House', 'Hlavná 67, 040 01 Košice', '18 min walk', 20, '€145/month', True,
+         'Multicultural dormitory specifically designed for international students. Offers language exchange programs, cultural events, and international cuisine in the shared kitchens. English-speaking staff available 24/7.',
+         'Single Room,Double Room', 80, 'Andrea Novotná', 'andrea.novotna@tuke.sk', '+421 55 602 4289', 2, '2024-06-15 14:00:00'),
+         
+        (8, 'Sports Residence', 'Štúrova 14, 042 00 Košice', '12 min walk', 16, '€130/month', True,
+         'Perfect for athletic students! Features gym, indoor sports hall, outdoor volleyball and basketball courts. Close to university sports facilities. Organized sports tournaments and fitness classes.',
+         'Single Room,Double Room,Triple Room', 96, 'Marek Svoboda', 'marek.svoboda@tuke.sk', '+421 55 602 4312', 2, '2024-07-20 09:45:00'),
     ]
     
     for dorm in dormitories_data:
@@ -493,6 +549,10 @@ def seed_data(conn):
         (5, 2, 'WiFi'), (6, 2, 'Kitchen'), (7, 2, 'Gym'), (8, 2, 'Parking'),
         (9, 3, 'WiFi'), (10, 3, 'Kitchen'), (11, 3, 'Study Room'),
         (12, 4, 'WiFi'), (13, 4, 'Kitchen'), (14, 4, 'Cafeteria'), (15, 4, 'Sports Hall'),
+        (16, 5, 'WiFi'), (17, 5, 'Study Room'), (18, 5, '3D Printing Lab'), (19, 5, 'Coworking Space'),
+        (20, 6, 'WiFi'), (21, 6, 'Kitchen'), (22, 6, 'Garden'), (23, 6, 'Bike Storage'),
+        (24, 7, 'WiFi'), (25, 7, 'Kitchen'), (26, 7, 'Language Exchange'), (27, 7, '24/7 Reception'),
+        (28, 8, 'WiFi'), (29, 8, 'Gym'), (30, 8, 'Sports Hall'), (31, 8, 'Basketball Court'),
     ]
     
     for amenity in amenities_data:

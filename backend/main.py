@@ -2073,10 +2073,12 @@ def apply_dormitory(
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     token = authorization.replace("Bearer ", "")
-    student_id = verify_token(token)
+    student = verify_token(token)
     
-    if not student_id:
+    if not student:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    student_id = student['id']
     
     conn = get_connection()
     
