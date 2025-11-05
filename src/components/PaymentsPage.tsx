@@ -14,91 +14,84 @@ import {
   FileText,
   Clock
 } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+type Payment = {
+  id: number;
+  type: string;
+  description: string;
+  amount: number;
+  date: string;
+  dueDate: string;
+  status: string;
+  method: string;
+  invoice: string;
+  icon: string;
+};
+
+type Balance = {
+  total: number;
+  currency: string;
+};
 
 export function PaymentsPage() {
-  const balance = {
-    total: -450,
-    currency: "€",
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [balance, setBalance] = useState<Balance>({ total: 0, currency: "€" });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    
+    Promise.all([
+      fetch(`${API_BASE}/api/payments`, { headers }).then(res => res.json()),
+      fetch(`${API_BASE}/api/payments/balance`, { headers }).then(res => res.json()),
+    ])
+      .then(([paymentsData, balanceData]) => {
+        setPayments(paymentsData);
+        setBalance(balanceData);
+      })
+      .catch(err => console.error("Failed to load payments:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const getIcon = (iconName: string) => {
+    switch (iconName) {
+      case "Home": return Home;
+      case "BookOpen": return BookOpen;
+      case "FileText": return FileText;
+      default: return FileText;
+    }
   };
 
-  const upcomingPayments = [
-    {
-      id: 1,
-      type: "Dormitory",
-      description: "Monthly rent - December 2025",
-      amount: 120,
-      dueDate: "December 1, 2025",
-      status: "pending",
-      icon: Home,
-    },
-    {
-      id: 2,
-      type: "Tuition Fee",
-      description: "Winter Semester 2025/26",
-      amount: 0,
-      dueDate: "November 30, 2025",
-      status: "paid",
-      icon: BookOpen,
-    },
-  ];
+  const getStatusIcon = (status: string) => {
+    if (status === "paid" || status === "waived") return <CheckCircle className="h-4 w-4" />;
+    if (status === "pending") return <Clock className="h-4 w-4" />;
+    return <AlertCircle className="h-4 w-4" />;
+  };
 
-  const paymentHistory = [
-    {
-      id: 1,
-      type: "Dormitory",
-      description: "Monthly rent - November 2025",
-      amount: 120,
-      date: "November 1, 2025",
-      status: "paid",
-      method: "Bank Transfer",
-      invoice: "INV-2025-0145",
-      icon: Home,
-    },
-    {
-      id: 2,
-      type: "Administrative Fee",
-      description: "Document issuance",
-      amount: 15,
-      date: "October 28, 2025",
-      status: "paid",
-      method: "Credit Card",
-      invoice: "INV-2025-0132",
-      icon: FileText,
-    },
-    {
-      id: 3,
-      type: "Dormitory",
-      description: "Monthly rent - October 2025",
-      amount: 120,
-      date: "October 1, 2025",
-      status: "paid",
-      method: "Bank Transfer",
-      invoice: "INV-2025-0098",
-      icon: Home,
-    },
-    {
-      id: 4,
-      type: "Dormitory Deposit",
-      description: "Security deposit",
-      amount: 240,
-      date: "September 1, 2025",
-      status: "paid",
-      method: "Bank Transfer",
-      invoice: "INV-2025-0067",
-      icon: Home,
-    },
-    {
-      id: 5,
-      type: "Tuition Fee",
-      description: "Winter Semester 2025/26",
-      amount: 0,
-      date: "September 15, 2025",
-      status: "waived",
-      method: "N/A",
-      invoice: "INV-2025-0045",
-      icon: BookOpen,
-    },
-  ];
+  const getStatusColor = (status: string) => {
+    if (status === "paid") return "bg-green-600";
+    if (status === "waived") return "bg-blue-600";
+    if (status === "pending") return "bg-orange-600";
+    return "bg-gray-600";
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1>Payments</h1>
+          <p className="text-muted-foreground">Loading payment data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const upcomingPayments = payments.filter(p => p.status === "pending");
+  const paymentHistory = payments.filter(p => p.status !== "pending");
 
   const paymentMethods = [
     {
@@ -177,7 +170,7 @@ export function PaymentsPage() {
         <CardContent>
           <div className="space-y-4">
             {upcomingPayments.map((payment) => {
-              const Icon = payment.icon;
+              const Icon = getIcon(payment.icon);
               return (
                 <div 
                   key={payment.id} 
@@ -255,7 +248,7 @@ export function PaymentsPage() {
         <CardContent>
           <div className="space-y-3">
             {paymentHistory.map((payment, index) => {
-              const Icon = payment.icon;
+              const Icon = getIcon(payment.icon);
               return (
                 <div key={payment.id}>
                   <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">

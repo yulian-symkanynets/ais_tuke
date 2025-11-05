@@ -5,8 +5,46 @@ import { Label } from "./ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { User, Mail, Phone, MapPin, Calendar, GraduationCap } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+type Student = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  studentId: string;
+  year: number;
+  program: string;
+  gpa: number;
+};
 
 export function ProfilePage() {
+  const [student, setStudent] = useState<Student | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/profile`)
+      .then(res => res.json())
+      .then(data => setStudent(data))
+      .catch(err => console.error("Failed to load profile:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !student) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1>Profile</h1>
+          <p className="text-muted-foreground">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const initials = `${student.firstName[0]}${student.lastName[0]}`;
+
   return (
     <div className="space-y-6">
       <div>
@@ -25,7 +63,7 @@ export function ProfilePage() {
             <Avatar className="h-32 w-32">
               <AvatarImage src="" />
               <AvatarFallback className="bg-primary text-primary-foreground text-3xl">
-                YK
+                {initials}
               </AvatarFallback>
             </Avatar>
             <Button variant="outline" className="w-full">
@@ -45,11 +83,11 @@ export function ProfilePage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" defaultValue="Yulian" />
+                <Input id="firstName" defaultValue={student.firstName} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" defaultValue="Kravchenko" />
+                <Input id="lastName" defaultValue={student.lastName} />
               </div>
             </div>
 
@@ -58,7 +96,7 @@ export function ProfilePage() {
               <Input 
                 id="email" 
                 type="email" 
-                defaultValue="yulian.kravchenko@student.tuke.sk"
+                defaultValue={student.email} 
               />
             </div>
 
@@ -84,7 +122,7 @@ export function ProfilePage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Program</p>
-                <p className="mt-1">Computer Science</p>
+                <p className="mt-1">{student.program}</p>
               </div>
             </div>
 
@@ -94,7 +132,7 @@ export function ProfilePage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Student ID</p>
-                <p className="mt-1">123456</p>
+                <p className="mt-1">{student.studentId}</p>
               </div>
             </div>
 
@@ -103,8 +141,17 @@ export function ProfilePage() {
                 <Calendar className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Year of Study</p>
-                <p className="mt-1">3rd Year</p>
+                <p className="text-sm text-muted-foreground">Year</p>
+                <p className="mt-1">{student.year}rd Year</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Badge className="h-10 w-10 rounded-lg justify-center">GPA</Badge>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Grade Point Average</p>
               </div>
             </div>
 

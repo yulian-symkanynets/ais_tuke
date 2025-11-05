@@ -12,12 +12,29 @@ import { PaymentsPage } from "./components/PaymentsPage";
 import { NotificationsPage } from "./components/NotificationsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { ProfilePage } from "./components/ProfilePage";
+import { LoginPage } from "./components/LoginPage";
+import { RegisterPage } from "./components/RegisterPage";
+import { TeacherDashboard } from "./components/TeacherDashboard";
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [userRole, setUserRole] = useState<string>("student");
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [language, setLanguage] = useState("EN");
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const token = localStorage.getItem("authToken");
+    const student = localStorage.getItem("student");
+    if (token && student) {
+      setIsAuthenticated(true);
+      const studentData = JSON.parse(student);
+      setUserRole(studentData.role || "student");
+    }
+  }, []);
 
   useEffect(() => {
     if (darkMode) {
@@ -27,7 +44,53 @@ export default function App() {
     }
   }, [darkMode]);
 
+  const handleLoginSuccess = (token: string, student: any) => {
+    setIsAuthenticated(true);
+    setShowRegister(false);
+    setUserRole(student.role || "student");
+  };
+
+  const handleRegisterSuccess = (token: string, student: any) => {
+    setIsAuthenticated(true);
+    setShowRegister(false);
+    setUserRole(student.role || "student");
+    setShowRegister(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("student");
+    setIsAuthenticated(false);
+    setActiveSection("dashboard");
+  };
+
+  // Show login/register page if not authenticated
+  if (!isAuthenticated) {
+    if (showRegister) {
+      return (
+        <RegisterPage
+          onRegisterSuccess={handleRegisterSuccess}
+          onSwitchToLogin={() => setShowRegister(false)}
+        />
+      );
+    }
+    return (
+      <LoginPage
+        onLoginSuccess={handleLoginSuccess}
+        onSwitchToRegister={() => setShowRegister(true)}
+      />
+    );
+  }
+
   const renderContent = () => {
+    // Show Teacher Dashboard for teacher role
+    if (userRole === "teacher") {
+      if (activeSection === "dashboard") {
+        return <TeacherDashboard />;
+      }
+      // Teachers can also view other pages
+    }
+
     switch (activeSection) {
       case "dashboard":
         return <Dashboard />;
@@ -48,7 +111,12 @@ export default function App() {
       case "notifications":
         return <NotificationsPage />;
       case "settings":
-        return <SettingsPage />;
+        return <SettingsPage 
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+          language={language}
+          onToggleLanguage={() => setLanguage(language === "EN" ? "SK" : "EN")}
+        />;
       case "profile":
         return <ProfilePage />;
       default:
@@ -64,6 +132,7 @@ export default function App() {
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         language={language}
         onToggleLanguage={() => setLanguage(language === "EN" ? "SK" : "EN")}
+        onLogout={handleLogout}
       />
       
       <div className="flex">

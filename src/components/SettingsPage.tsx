@@ -10,8 +10,52 @@ import {
   Mail,
   Smartphone
 } from "lucide-react";
+import { useState, useEffect } from "react";
 
-export function SettingsPage() {
+const API_BASE = "http://127.0.0.1:8000";
+
+type SettingsPageProps = {
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
+  language: string;
+  onToggleLanguage: () => void;
+};
+
+export function SettingsPage({ darkMode, onToggleDarkMode, language, onToggleLanguage }: SettingsPageProps) {
+  const [settings, setSettings] = useState({
+    emailNotifications: true,
+    gradeNotifications: true,
+    scheduleNotifications: true,
+    pushNotifications: false,
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleToggle = async (key: string, value: boolean) => {
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+
+    // Save to backend
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      try {
+        await fetch(`${API_BASE}/api/settings/update`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            [key]: value.toString(),
+            darkMode: darkMode.toString(),
+            language: language,
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to save settings:", error);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -41,7 +85,7 @@ export function SettingsPage() {
                 </p>
               </div>
             </div>
-            <Switch />
+            <Switch checked={darkMode} onCheckedChange={onToggleDarkMode} />
           </div>
 
           <div className="flex items-center justify-between">
@@ -56,8 +100,8 @@ export function SettingsPage() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm">
-              English
+            <Button variant="outline" size="sm" onClick={onToggleLanguage}>
+              {language}
             </Button>
           </div>
         </CardContent>
@@ -83,7 +127,10 @@ export function SettingsPage() {
                 </p>
               </div>
             </div>
-            <Switch defaultChecked />
+            <Switch 
+              checked={settings.emailNotifications} 
+              onCheckedChange={(val) => handleToggle("emailNotifications", val)} 
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -98,7 +145,10 @@ export function SettingsPage() {
                 </p>
               </div>
             </div>
-            <Switch defaultChecked />
+            <Switch 
+              checked={settings.gradeNotifications} 
+              onCheckedChange={(val) => handleToggle("gradeNotifications", val)} 
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -113,7 +163,10 @@ export function SettingsPage() {
                 </p>
               </div>
             </div>
-            <Switch defaultChecked />
+            <Switch 
+              checked={settings.scheduleNotifications} 
+              onCheckedChange={(val) => handleToggle("scheduleNotifications", val)} 
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -128,7 +181,10 @@ export function SettingsPage() {
                 </p>
               </div>
             </div>
-            <Switch />
+            <Switch 
+              checked={settings.pushNotifications} 
+              onCheckedChange={(val) => handleToggle("pushNotifications", val)} 
+            />
           </div>
         </CardContent>
       </Card>
