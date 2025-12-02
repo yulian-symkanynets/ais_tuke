@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import {
@@ -9,102 +10,64 @@ import {
   TableRow,
 } from "./ui/table";
 import { TrendingUp, Award } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
 
-// --- Types ---
-type Grade = {
+interface Grade {
   id: number;
-  subject: string;
-  code: string;
-  grade: string; // A, B, C, D, E, FX
-  credits: number;
+  student_id: number;
+  subject_id: number;
+  teacher_id: number;
+  grade: string;
+  numeric_grade: number;
   semester: string;
-  date: string; // e.g. "Jun 15, 2025"
-  numericGrade: number; // 1.0 best ... 5.0 fail
-};
+  date: string;
+  notes?: string;
+  subject_name?: string;
+  subject_code?: string;
+  student_name?: string;
+}
 
-// Helpers
 function weightedGPA(items: Grade[]): number | null {
   if (!items.length) return null;
-  const totalCredits = items.reduce((s, g) => s + g.credits, 0);
-  if (!totalCredits) return null;
-  const sum = items.reduce((s, g) => s + g.numericGrade * g.credits, 0);
-  return +(sum / totalCredits).toFixed(2);
+  const sum = items.reduce((s, g) => s + g.numeric_grade, 0);
+  return +(sum / items.length).toFixed(2);
 }
 
 function fmtNumber(n: number | null | undefined) {
   return n == null || Number.isNaN(n) ? "—" : n.toFixed(2);
 }
 
-const API_BASE = "http://127.0.0.1:8000"; // adjust if needed
-
 export function GradesPage() {
+  const { user } = useAuth();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [semesters, setSemesters] = useState<string[]>([]);
+  const [currentSemester] = useState<string>("Winter 2025/26");
 
-  // Controls for random generation
-  const [count, setCount] = useState(12);
-  const [seed, setSeed] = useState<string>("");
-  const [onlySemester, setOnlySemester] = useState(false);
-  const [currentSemester, setCurrentSemester] = useState<string>("Winter 2025/26");
+  const isTeacher = user?.role === "teacher" || user?.role === "admin";
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Fetch semesters on mount
-  useEffect(() => {
-    fetch(`${API_BASE}/api/semesters`)
-      .then((r) => r.json())
-      .then((data) => {
-        const list: string[] = data?.semesters ?? [];
-        setSemesters(list);
-        // Prefer a Winter semester if present, fallback to first
-        const preferred = list.find((s) => /Winter/.test(s)) ?? list[0] ?? "Winter 2025/26";
-        setCurrentSemester(preferred);
-      })
-      .catch(() => {
-        // non-fatal for the page, keep default currentSemester
-      });
-  }, []);
-
-  // Fetch grades
-  const fetchGrades = () => {
-    setLoading(true);
-    setError(null);
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-
-    const params = new URLSearchParams();
-    params.set("count", String(count));
-    if (seed.trim()) params.set("seed", seed.trim());
-    if (onlySemester && currentSemester) params.set("semester", currentSemester);
-
-    fetch(`${API_BASE}/api/grades?${params.toString()}` , { signal: ac.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        return r.json();
-      })
-      .then((data: Grade[]) => setGrades(data))
-      .catch((e) => setError(e.message || "Failed to load grades"))
-      .finally(() => setLoading(false));
-  };
-
-  // initial load
   useEffect(() => {
     fetchGrades();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // recompute stats
-  const overallGPA = useMemo(() => weightedGPA(grades), [grades]);
-  const totalCredits = useMemo(() => grades.reduce((s, g) => s + g.credits, 0), [grades]);
-  const currentSemesterGrades = useMemo(
-    () => grades.filter((g) => g.semester === currentSemester),
-    [grades, currentSemester]
-  );
-  const currentGPA = useMemo(() => weightedGPA(currentSemesterGrades), [currentSemesterGrades]);
+  const fetchGrades = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.get<Grade[]>("/api/grades/");
+      setGrades(data || []);
+    } catch (e: any) {
+      setError(e.message || "Failed to load grades");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const overallGPA = weightedGPA(grades);
+  const currentSemesterGrades = grades.filter((g) => g.semester === currentSemester);
+  const currentGPA = weightedGPA(currentSemesterGrades);
+  const totalCredits = grades.length * 6; // Assume 6 credits per subject for display
 
   const getGradeBadgeVariant = (grade: string): "default" | "secondary" | "outline" => {
     if (grade === "A") return "default";
@@ -116,68 +79,9 @@ export function GradesPage() {
     <div className="space-y-6">
       <div>
         <h1>Grades</h1>
-        <p className="text-muted-foreground">View your academic performance and grades</p>
-      </div>
-
-      {/* Controls */}
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="flex items-end gap-3">
-          <div className="flex-1">
-            <label className="text-sm text-muted-foreground">Records</label>
-            <input
-              type="number"
-              min={1}
-              max={200}
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
-              className="mt-1 w-full rounded-md border px-3 py-2"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-sm text-muted-foreground">Seed (optional)</label>
-            <input
-              value={seed}
-              onChange={(e) => setSeed(e.target.value)}
-              placeholder="e.g. 42"
-              className="mt-1 w-full rounded-md border px-3 py-2"
-            />
-          </div>
-        </div>
-        <div className="flex items-end gap-3">
-          <div className="flex-1">
-            <label className="text-sm text-muted-foreground">Current semester</label>
-            <select
-              value={currentSemester}
-              onChange={(e) => setCurrentSemester(e.target.value)}
-              className="mt-1 w-full rounded-md border px-3 py-2"
-            >
-              {(semesters.length ? semesters : [currentSemester]).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-sm mt-6">
-            <input
-              id="only-sem"
-              type="checkbox"
-              checked={onlySemester}
-              onChange={(e) => setOnlySemester(e.target.checked)}
-              className="h-4 w-4"
-            />
-            Generate only this semester
-          </label>
-        </div>
-        <div className="flex items-end gap-3">
-          <button
-            onClick={fetchGrades}
-            className="inline-flex items-center justify-center rounded-xl border px-4 py-2 shadow-sm hover:bg-accent/10"
-            disabled={loading}
-          >
-            {loading ? "Loading…" : "Refresh"}
-          </button>
-        </div>
+        <p className="text-muted-foreground">
+          {isTeacher ? "View and manage student grades" : "View your academic performance and grades"}
+        </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -187,7 +91,7 @@ export function GradesPage() {
             <TrendingUp className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl">{fmtNumber(overallGPA ?? null)}</div>
+            <div className="text-3xl">{fmtNumber(overallGPA)}</div>
             <p className="text-xs text-muted-foreground mt-1">Based on {grades.length} subjects</p>
           </CardContent>
         </Card>
@@ -198,7 +102,7 @@ export function GradesPage() {
             <Award className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl">{fmtNumber(currentGPA ?? null)}</div>
+            <div className="text-3xl">{fmtNumber(currentGPA)}</div>
             <p className="text-xs text-muted-foreground mt-1">{currentSemester}</p>
           </CardContent>
         </Card>
@@ -232,51 +136,46 @@ export function GradesPage() {
                   <TableHead>Subject</TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Semester</TableHead>
-                  <TableHead className="text-center">Credits</TableHead>
                   <TableHead className="text-center">Grade</TableHead>
                   <TableHead>Date</TableHead>
+                  {isTeacher && <TableHead>Student</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading
-                  ? Array.from({ length: 6 }).map((_, i) => (
-                      <TableRow key={`sk-${i}`}>
-                        <TableCell>
-                          <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="h-6 w-14 animate-pulse rounded bg-muted" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="mx-auto h-4 w-8 animate-pulse rounded bg-muted" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="mx-auto h-6 w-12 animate-pulse rounded bg-muted" />
-                        </TableCell>
-                        <TableCell>
-                          <div className="h-4 w-28 animate-pulse rounded bg-muted" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  : grades.map((grade) => (
-                      <TableRow key={grade.id}>
-                        <TableCell>{grade.subject}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{grade.code}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{grade.semester}</TableCell>
-                        <TableCell className="text-center">{grade.credits}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={getGradeBadgeVariant(grade.grade)} className="min-w-[40px] justify-center">
-                            {grade.grade}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{grade.date}</TableCell>
-                      </TableRow>
-                    ))}
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={`sk-${i}`}>
+                      <TableCell><div className="h-4 w-40 animate-pulse rounded bg-muted" /></TableCell>
+                      <TableCell><div className="h-6 w-14 animate-pulse rounded bg-muted" /></TableCell>
+                      <TableCell><div className="h-4 w-32 animate-pulse rounded bg-muted" /></TableCell>
+                      <TableCell><div className="mx-auto h-6 w-12 animate-pulse rounded bg-muted" /></TableCell>
+                      <TableCell><div className="h-4 w-28 animate-pulse rounded bg-muted" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : grades.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={isTeacher ? 6 : 5} className="text-center text-muted-foreground py-8">
+                      No grades found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  grades.map((grade) => (
+                    <TableRow key={grade.id}>
+                      <TableCell>{grade.subject_name || "Unknown"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{grade.subject_code || "-"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{grade.semester}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={getGradeBadgeVariant(grade.grade)} className="min-w-[40px] justify-center">
+                          {grade.grade}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{grade.date}</TableCell>
+                      {isTeacher && <TableCell>{grade.student_name || "-"}</TableCell>}
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

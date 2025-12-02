@@ -2,78 +2,50 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Calendar, BookOpen, TrendingUp, Clock, Newspaper, Pin } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
 
 // ---- Types ----
-type Exam = { subject: string; date: string; time: string };
-type Subject = { name: string; code: string; credits: number };
-type ScheduleItem = { day: string; time: string; subject: string; room: string };
-type NotificationItem = { type: "grade" | "enrolment" | "info" | string; message: string; time: string };
-type NewsItem = { id: number; title: string; description: string; date: string; category: string; pinned?: boolean };
-
-const API_BASE = "http://127.0.0.1:8000"; // adjust if your backend runs elsewhere
+type Exam = { id: number; subject_code: string; subject_name: string; date: string; time: string; room: string; type: string };
+type Subject = { id: number; code: string; name: string; credits: number; teacher_name?: string };
+type ScheduleItem = { id: number; day: string; time: string; subject_code: string; subject_name: string; room: string; class_type: string };
+type NotificationItem = { id: number; type: string; title: string; message: string; read: boolean; created_at: string };
+type NewsItem = { id: number; title: string; summary: string; date: string; category: string };
+type DashboardStats = { enrolled_subjects: number; total_credits: number; average_grade: number | null; unread_notifications: number; upcoming_exams: number };
 
 // ---- Local fallbacks (used if API isn't ready) ----
 const FALLBACK_EXAMS: Exam[] = [
-  { subject: "Data Structures", date: "Oct 12, 2025", time: "09:00" },
-  { subject: "Web Technologies", date: "Oct 15, 2025", time: "13:00" },
-  { subject: "Database Systems", date: "Oct 18, 2025", time: "10:30" },
+  { id: 1, subject_code: "ZADS", subject_name: "Data Structures", date: "Oct 12, 2025", time: "09:00", room: "PK6 A101", type: "Final Exam" },
+  { id: 2, subject_code: "WEBTECH", subject_name: "Web Technologies", date: "Oct 15, 2025", time: "13:00", room: "PK6 A102", type: "Final Exam" },
 ];
 
 const FALLBACK_SUBJECTS: Subject[] = [
-  { name: "Data Structures", code: "ZADS", credits: 6 },
-  { name: "Web Technologies", code: "WEBTECH", credits: 5 },
-  { name: "Database Systems", code: "DBS", credits: 6 },
-  { name: "Software Engineering", code: "SE", credits: 6 },
+  { id: 1, code: "ZADS", name: "Data Structures", credits: 6 },
+  { id: 2, code: "WEBTECH", name: "Web Technologies", credits: 5 },
 ];
 
 const FALLBACK_SCHEDULE: ScheduleItem[] = [
-  { day: "Monday", time: "08:00-09:40", subject: "Data Structures", room: "PK6 C303" },
-  { day: "Monday", time: "10:00-11:40", subject: "Web Technologies", room: "PK6 C409" },
-  { day: "Tuesday", time: "13:00-14:40", subject: "Database Systems", room: "PK6 C208" },
-  { day: "Wednesday", time: "08:00-09:40", subject: "Software Engineering", room: "PK6 C303" },
-  { day: "Thursday", time: "10:00-11:40", subject: "Web Technologies", room: "PK6 C409" },
+  { id: 1, day: "Monday", time: "08:00-09:40", subject_code: "ZADS", subject_name: "Data Structures", room: "PK6 C303", class_type: "Lecture" },
+  { id: 2, day: "Tuesday", time: "10:00-11:40", subject_code: "WEBTECH", subject_name: "Web Technologies", room: "PK6 C409", class_type: "Lab" },
 ];
 
 const FALLBACK_NOTIFICATIONS: NotificationItem[] = [
-  { type: "grade", message: "New grade added: Data Structures - A", time: "2 hours ago" },
-  { type: "enrolment", message: "Subject enrolment confirmed: Web Technologies", time: "1 day ago" },
-  { type: "info", message: "Schedule change: Database Systems moved to PK6 C208", time: "2 days ago" },
+  { id: 1, type: "grade", title: "New Grade", message: "New grade added: Data Structures - A", read: false, created_at: "2 hours ago" },
+  { id: 2, type: "enrolment", title: "Enrollment", message: "Subject enrolment confirmed: Web Technologies", read: true, created_at: "1 day ago" },
 ];
 
 const FALLBACK_NEWS: NewsItem[] = [
-  {
-    id: 1,
-    title: "Winter Exam Period Schedule Released",
-    description: "The official exam schedule for Winter Semester 2025/26 is now available in the Grades section.",
-    date: "October 20, 2025",
-    category: "Academic",
-    pinned: true,
-  },
-  {
-    id: 2,
-    title: "Student Career Fair 2025",
-    description: "Meet top tech companies and explore internship opportunities. November 15-16 in Main Hall.",
-    date: "October 18, 2025",
-    category: "Events",
-    pinned: false,
-  },
-  {
-    id: 3,
-    title: "Library Extended Hours During Exam Period",
-    description: "The university library will be open 24/7 from December 1st to support students during exams.",
-    date: "October 17, 2025",
-    category: "Services",
-    pinned: false,
-  },
-  {
-    id: 4,
-    title: "New AI Research Lab Opening",
-    description: "State-of-the-art AI research facility opens next month. Applications for student assistants now open.",
-    date: "October 15, 2025",
-    category: "Research",
-    pinned: false,
-  },
+  { id: 1, title: "Winter Exam Period Schedule Released", summary: "The official exam schedule for Winter Semester 2025/26 is now available.", date: "November 15, 2025", category: "Academic" },
+  { id: 2, title: "Student Career Fair 2025", summary: "Meet top tech companies and explore internship opportunities.", date: "November 10, 2025", category: "Events" },
 ];
+
+const FALLBACK_STATS: DashboardStats = {
+  enrolled_subjects: 4,
+  total_credits: 24,
+  average_grade: 1.5,
+  unread_notifications: 2,
+  upcoming_exams: 3
+};
 
 function getCategoryColor(category: string) {
   switch (category) {
@@ -85,71 +57,54 @@ function getCategoryColor(category: string) {
       return "bg-green-600";
     case "Research":
       return "bg-orange-600";
+    case "Facilities":
+      return "bg-teal-600";
     default:
       return "bg-gray-600";
   }
 }
 
 export function Dashboard() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [stats, setStats] = useState<DashboardStats>(FALLBACK_STATS);
   const [upcomingExams, setUpcomingExams] = useState<Exam[]>(FALLBACK_EXAMS);
   const [activeSubjects, setActiveSubjects] = useState<Subject[]>(FALLBACK_SUBJECTS);
   const [weekSchedule, setWeekSchedule] = useState<ScheduleItem[]>(FALLBACK_SCHEDULE);
   const [notifications, setNotifications] = useState<NotificationItem[]>(FALLBACK_NOTIFICATIONS);
   const [newsItems, setNewsItems] = useState<NewsItem[]>(FALLBACK_NEWS);
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchAll = () => {
+  const fetchAll = async () => {
     setLoading(true);
     setError(null);
 
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
+    try {
+      const [statsData, examsData, subjectsData, scheduleData, notifsData, newsData] = await Promise.all([
+        api.get<DashboardStats>("/api/dashboard/stats").catch(() => FALLBACK_STATS),
+        api.get<Exam[]>("/api/dashboard/exams").catch(() => FALLBACK_EXAMS),
+        api.get<Subject[]>("/api/dashboard/subjects").catch(() => FALLBACK_SUBJECTS),
+        api.get<ScheduleItem[]>("/api/dashboard/schedule").catch(() => FALLBACK_SCHEDULE),
+        api.get<NotificationItem[]>("/api/dashboard/notifications").catch(() => FALLBACK_NOTIFICATIONS),
+        api.get<NewsItem[]>("/api/dashboard/news").catch(() => FALLBACK_NEWS),
+      ]);
 
-    const safeFetch = async <T,>(path: string, fallback: T): Promise<T> => {
-      try {
-        const res = await fetch(`${API_BASE}${path}`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        const data = await res.json();
-        return data as T;
-      } catch (e) {
-        return fallback;
-      }
-    };
-
-    Promise.all([
-      safeFetch<Exam[]>("/api/dashboard/exams", FALLBACK_EXAMS),
-      safeFetch<Subject[]>("/api/dashboard/subjects", FALLBACK_SUBJECTS),
-      safeFetch<ScheduleItem[]>("/api/dashboard/schedule", FALLBACK_SCHEDULE),
-      safeFetch<NotificationItem[]>("/api/dashboard/notifications", FALLBACK_NOTIFICATIONS),
-      safeFetch<NewsItem[]>("/api/dashboard/news", FALLBACK_NEWS),
-    ])
-      .then(([exams, subjects, schedule, notifs, news]) => {
-        setUpcomingExams(exams);
-        setActiveSubjects(subjects);
-        setWeekSchedule(schedule);
-        setNotifications(notifs);
-        // sort: pinned first, then by date desc if dates look comparable
-        const sorted = [...news].sort((a, b) => {
-          if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-          const da = Date.parse(a.date);
-          const db = Date.parse(b.date);
-          if (!Number.isNaN(da) && !Number.isNaN(db)) return db - da;
-          return a.id - b.id;
-        });
-        setNewsItems(sorted);
-      })
-      .catch((e) => setError((e as Error).message || "Failed to load dashboard"))
-      .finally(() => setLoading(false));
+      setStats(statsData);
+      setUpcomingExams(examsData);
+      setActiveSubjects(subjectsData);
+      setWeekSchedule(scheduleData);
+      setNotifications(notifsData);
+      setNewsItems(newsData);
+    } catch (e: any) {
+      setError(e.message || "Failed to load dashboard");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const examsCount = useMemo(() => upcomingExams.length, [upcomingExams]);
@@ -160,8 +115,8 @@ export function Dashboard() {
       <div className="rounded-xl bg-gradient-to-r from-primary to-primary/80 p-8 text-primary-foreground shadow-lg">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl mb-2" style={{ fontFamily: "'Brush Script MT', 'Lucida Handwriting', cursive" }}>
-              Welcome, Yulian!
+            <h1 className="text-3xl mb-2">
+              Welcome, {user?.full_name || "Student"}!
             </h1>
             <p className="opacity-90">Winter Term 2025/26 • Week 8 of 13</p>
           </div>
@@ -189,12 +144,12 @@ export function Dashboard() {
             <Calendar className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl mb-4">{examsCount}</div>
+            <div className="text-2xl mb-4">{stats.upcoming_exams}</div>
             <div className="space-y-2">
-              {(loading ? FALLBACK_EXAMS : upcomingExams).slice(0, 2).map((exam, idx) => (
-                <div key={idx} className="text-sm">
+              {upcomingExams.slice(0, 2).map((exam) => (
+                <div key={exam.id} className="text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{exam.subject}</span>
+                    <span className="text-muted-foreground">{exam.subject_name}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
@@ -212,10 +167,10 @@ export function Dashboard() {
             <BookOpen className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl mb-4">{activeSubjects.length}</div>
+            <div className="text-2xl mb-4">{stats.enrolled_subjects}</div>
             <div className="space-y-2">
-              {(loading ? FALLBACK_SUBJECTS : activeSubjects).slice(0, 2).map((subject, idx) => (
-                <div key={idx} className="text-sm">
+              {activeSubjects.slice(0, 2).map((subject) => (
+                <div key={subject.id} className="text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">{subject.code}</span>
                     <Badge variant="secondary">{subject.credits} ECTS</Badge>
@@ -232,15 +187,18 @@ export function Dashboard() {
             <TrendingUp className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl mb-1">3.45</div>
+            <div className="text-2xl mb-1">{stats.average_grade?.toFixed(2) || "N/A"}</div>
             <p className="text-xs text-muted-foreground mb-4">Current GPA</p>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Credits Earned</span>
-                <span>142 / 180</span>
+                <span>{stats.total_credits} / 180</span>
               </div>
               <div className="h-2 w-full rounded-full bg-muted">
-                <div className="h-2 rounded-full bg-accent transition-all" style={{ width: "79%" }} />
+                <div 
+                  className="h-2 rounded-full bg-accent transition-all" 
+                  style={{ width: `${Math.min((stats.total_credits / 180) * 100, 100)}%` }} 
+                />
               </div>
             </div>
           </CardContent>
@@ -257,15 +215,14 @@ export function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {(loading ? FALLBACK_NEWS : newsItems).map((news) => (
+            {newsItems.map((news) => (
               <div key={news.id} className="p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors border-l-4 border-primary/50">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      {news.pinned && <Pin className="h-4 w-4 text-primary fill-primary" />}
                       <h3 className="font-medium">{news.title}</h3>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">{news.description}</p>
+                    <p className="text-sm text-muted-foreground mb-2">{news.summary}</p>
                     <div className="flex items-center gap-3">
                       <Badge className={getCategoryColor(news.category)}>{news.category}</Badge>
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -289,21 +246,25 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {(loading ? FALLBACK_SCHEDULE : weekSchedule).map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between rounded-lg bg-muted/50 p-3 hover:bg-muted transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="min-w-[80px]">
-                      <div className="text-sm">{item.day}</div>
-                      <div className="text-xs text-muted-foreground">{item.time}</div>
+              {weekSchedule.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No classes scheduled</p>
+              ) : (
+                weekSchedule.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted/50 p-3 hover:bg-muted transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="min-w-[80px]">
+                        <div className="text-sm">{item.day}</div>
+                        <div className="text-xs text-muted-foreground">{item.time}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm">{item.subject_name}</div>
+                        <div className="text-xs text-muted-foreground">{item.room}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm">{item.subject}</div>
-                      <div className="text-xs text-muted-foreground">{item.room}</div>
-                    </div>
+                    <Badge variant="outline">{item.class_type}</Badge>
                   </div>
-                  <Badge variant="outline">{item.time.split("-")[0]}</Badge>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -311,21 +272,29 @@ export function Dashboard() {
         <Card className="shadow-md border-0">
           <CardHeader>
             <CardTitle>Recent Updates</CardTitle>
+            {stats.unread_notifications > 0 && (
+              <Badge variant="secondary">{stats.unread_notifications} unread</Badge>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {(loading ? FALLBACK_NOTIFICATIONS : notifications).map((notif, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-start gap-2">
-                    <div className="mt-1 h-2 w-2 rounded-full bg-accent flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm">{notif.message}</p>
-                      <p className="text-xs text-muted-foreground">{notif.time}</p>
+              {notifications.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No notifications</p>
+              ) : (
+                notifications.map((notif, idx) => (
+                  <div key={notif.id} className="space-y-1">
+                    <div className="flex items-start gap-2">
+                      <div className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${notif.read ? 'bg-muted' : 'bg-accent'}`} />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{notif.title}</p>
+                        <p className="text-sm text-muted-foreground">{notif.message}</p>
+                        <p className="text-xs text-muted-foreground">{notif.created_at}</p>
+                      </div>
                     </div>
+                    {idx < notifications.length - 1 && <div className="ml-1 h-4 w-px bg-border" />}
                   </div>
-                  {idx < notifications.length - 1 && <div className="ml-1 h-4 w-px bg-border" />}
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

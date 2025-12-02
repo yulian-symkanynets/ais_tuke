@@ -1,0 +1,18 @@
+# FastAPI and server
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy>=2.0.25
+
+# Pydantic (pre-built wheels for Python 3.13)
+pydantic>=2.5.0
+email-validator>=2.1.0
+
+# Authentication
+python-jose>=3.3.0
+bcrypt>=4.1.0
+
+# Cryptography (pre-built wheels)
+cryptography>=42.0.0

@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Badge } from "./ui/badge";
+import { useAuth } from "../contexts/AuthContext";
 
 interface TopNavProps {
   onMenuClick: () => void;
@@ -26,6 +27,13 @@ export function TopNav({
   language,
   onToggleLanguage 
 }: TopNavProps) {
+  const { user, logout } = useAuth();
+  const initials = user?.full_name
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase() || user?.email[0].toUpperCase() || "U";
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card shadow-sm">
       <div className="flex h-16 items-center justify-between px-4 md:px-6">
@@ -92,20 +100,32 @@ export function TopNav({
                 <Avatar className="h-8 w-8">
                   <AvatarImage src="" />
                   <AvatarFallback className="bg-primary text-primary-foreground">
-                    YK
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
-                <span className="hidden md:inline">Yulian Kravchenko</span>
+                <span className="hidden md:inline">
+                  {user?.full_name || user?.email || "User"}
+                </span>
                 <ChevronDown className="h-4 w-4 hidden md:inline" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                <div className="flex flex-col">
+                  <span>{user?.full_name || "User"}</span>
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {user?.email}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-normal capitalize">
+                    {user?.role}
+                  </span>
+                </div>
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Log out</DropdownMenuItem>
+              <DropdownMenuItem onClick={logout}>Log out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
