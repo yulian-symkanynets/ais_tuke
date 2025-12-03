@@ -7,6 +7,9 @@ from models.payment import Payment, PaymentType, PaymentStatus, PaymentMethod
 from models.dormitory import Dormitory, DormitoryApplication, ApplicationStatus
 from models.thesis import Thesis, ThesisType, ThesisStatus
 from models.notification import Notification, NotificationType
+from models.assignment import Assignment, StudentSubmission
+from models.activity_log import ActivityLog
+from models.document import Document, DocumentType
 
 __all__ = [
     "User", "UserRole",
@@ -18,4 +21,7 @@ __all__ = [
     "Dormitory", "DormitoryApplication", "ApplicationStatus",
     "Thesis", "ThesisType", "ThesisStatus",
     "Notification", "NotificationType",
+    "Assignment", "StudentSubmission",
+    "ActivityLog",
+    "Document", "DocumentType",
 ]

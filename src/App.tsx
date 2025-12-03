@@ -14,9 +14,12 @@ import { PaymentsPage } from "./components/PaymentsPage";
 import { NotificationsPage } from "./components/NotificationsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { ProfilePage } from "./components/ProfilePage";
+import { AssignmentsPage } from "./components/AssignmentsPage";
+import { ActivityPage } from "./components/ActivityPage";
+import { DocumentsPage } from "./components/DocumentsPage";
 
 function AppContent() {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -30,6 +33,28 @@ function AppContent() {
     }
   }, [darkMode]);
 
+  // Load theme preference from localStorage
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+      setDarkMode(true);
+    }
+    const savedLang = localStorage.getItem("language");
+    if (savedLang) {
+      setLanguage(savedLang);
+    }
+  }, []);
+
+  // Save theme preference
+  useEffect(() => {
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  // Save language preference
+  useEffect(() => {
+    localStorage.setItem("language", language);
+  }, [language]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -41,6 +66,18 @@ function AppContent() {
   if (!isAuthenticated) {
     return <LoginPage />;
   }
+
+  const handleNavigate = (section: string) => {
+    setActiveSection(section);
+  };
+
+  const handleThemeChange = (isDark: boolean) => {
+    setDarkMode(isDark);
+  };
+
+  const handleLanguageChange = (lang: string) => {
+    setLanguage(lang);
+  };
 
   const renderContent = () => {
     switch (activeSection) {
@@ -63,9 +100,20 @@ function AppContent() {
       case "notifications":
         return <NotificationsPage />;
       case "settings":
-        return <SettingsPage />;
+        return (
+          <SettingsPage 
+            onThemeChange={handleThemeChange} 
+            onLanguageChange={handleLanguageChange}
+          />
+        );
       case "profile":
         return <ProfilePage />;
+      case "assignments":
+        return <AssignmentsPage />;
+      case "activity":
+        return <ActivityPage />;
+      case "documents":
+        return <DocumentsPage />;
       default:
         return <Dashboard />;
     }
@@ -79,6 +127,7 @@ function AppContent() {
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         language={language}
         onToggleLanguage={() => setLanguage(language === "EN" ? "SK" : "EN")}
+        onNavigate={handleNavigate}
       />
       
       <div className="flex">

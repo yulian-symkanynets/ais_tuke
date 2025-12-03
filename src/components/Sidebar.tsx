@@ -9,7 +9,11 @@ import {
   X,
   Home,
   FileText,
-  CreditCard
+  CreditCard,
+  FileEdit,
+  User,
+  Activity,
+  FolderOpen
 } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -26,10 +30,14 @@ const menuItems = [
   { id: "enrolment", label: "Enrolment", icon: ClipboardList },
   { id: "schedule", label: "Schedule", icon: Calendar },
   { id: "grades", label: "Grades", icon: GraduationCap },
+  { id: "assignments", label: "Assignments", icon: FileEdit },
   { id: "dormitory", label: "Dormitory", icon: Home },
   { id: "thesis", label: "Thesis", icon: FileText },
   { id: "payments", label: "Payments", icon: CreditCard },
+  { id: "documents", label: "Documents", icon: FolderOpen },
   { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "profile", label: "Profile", icon: User },
+  { id: "activity", label: "Activity Log", icon: Activity },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -63,7 +71,7 @@ export function Sidebar({ activeSection, onSectionChange, isOpen, onClose }: Sid
             <X className="h-5 w-5" />
           </Button>
 
-          <nav className="flex-1 space-y-1 p-4">
+          <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeSection === item.id;

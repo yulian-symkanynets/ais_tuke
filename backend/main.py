@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 from database import engine, Base
 
 # Import all models to ensure they are registered with SQLAlchemy
@@ -12,13 +14,20 @@ from models.payment import Payment
 from models.dormitory import Dormitory, DormitoryApplication
 from models.thesis import Thesis
 from models.notification import Notification
+from models.assignment import Assignment, StudentSubmission
+from models.activity_log import ActivityLog
+from models.document import Document
 
 # Import routers
 from routers import auth, subjects, enrollments, schedules, grades, payments, dormitories, theses, notifications
-from routers import dashboard
+from routers import dashboard, profile, assignments, settings, activity, twofa, documents
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Create uploads directory
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -36,6 +45,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files for uploads
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
 # Include routers
 app.include_router(auth.router)
 app.include_router(subjects.router)
@@ -47,6 +59,12 @@ app.include_router(dormitories.router)
 app.include_router(theses.router)
 app.include_router(notifications.router)
 app.include_router(dashboard.router)
+app.include_router(profile.router)
+app.include_router(assignments.router)
+app.include_router(settings.router)
+app.include_router(activity.router)
+app.include_router(twofa.router)
+app.include_router(documents.router)
 
 
 @app.get("/")
@@ -57,6 +75,13 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "api": "AIS TUKE"}
+
+
+@app.get("/api/translations/{lang}")
+def get_translations(lang: str):
+    """Get translations for a language"""
+    from translations import get_all_translations
+    return get_all_translations(lang)
 
 
 if __name__ == "__main__":

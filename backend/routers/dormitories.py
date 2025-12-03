@@ -1,15 +1,17 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from database import get_db
-from auth import get_current_active_user, require_student
+from auth import get_current_active_user, require_student, require_role
 from models.user import User, UserRole
 from models.dormitory import Dormitory, DormitoryApplication, ApplicationStatus
 
-router = APIRouter(prefix="/api/dormitories", tags=["dormitories"])
+router = APIRouter(prefix="/api/dormitories", tags=["Dormitories"])
 
+
+# ============== SCHEMAS ==============
 
 class DormitoryBase(BaseModel):
     name: str
@@ -33,13 +35,14 @@ class DormitoryUpdate(BaseModel):
     amenities: Optional[str] = None
     is_active: Optional[bool] = None
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class DormitoryResponse(DormitoryBase):
     id: int
     is_active: bool
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DormitoryApplicationBase(BaseModel):
@@ -57,6 +60,8 @@ class DormitoryApplicationUpdate(BaseModel):
     move_in_date: Optional[datetime] = None
     deposit_paid: Optional[bool] = None
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class DormitoryApplicationResponse(BaseModel):
     id: int
@@ -71,95 +76,12 @@ class DormitoryApplicationResponse(BaseModel):
     dormitory_name: Optional[str] = None
     student_name: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-@router.get("/", response_model=List[DormitoryResponse])
-def get_dormitories(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Get all active dormitories"""
-    dormitories = db.query(Dormitory).filter(Dormitory.is_active == True).all()
-    return dormitories
+# ============== APPLICATION ENDPOINTS (Must be before /{dormitory_id}) ==============
 
-
-@router.get("/{dormitory_id}", response_model=DormitoryResponse)
-def get_dormitory(
-    dormitory_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Get a specific dormitory"""
-    dormitory = db.query(Dormitory).filter(Dormitory.id == dormitory_id).first()
-    if not dormitory:
-        raise HTTPException(status_code=404, detail="Dormitory not found")
-    return dormitory
-
-
-@router.post("/", response_model=DormitoryResponse, status_code=status.HTTP_201_CREATED)
-def create_dormitory(
-    dormitory: DormitoryCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Create dormitory - only admins"""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only admins can create dormitories")
-    
-    db_dormitory = Dormitory(**dormitory.model_dump())
-    db.add(db_dormitory)
-    db.commit()
-    db.refresh(db_dormitory)
-    return db_dormitory
-
-
-@router.put("/{dormitory_id}", response_model=DormitoryResponse)
-def update_dormitory(
-    dormitory_id: int,
-    dormitory_update: DormitoryUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Update dormitory - only admins"""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only admins can update dormitories")
-    
-    db_dormitory = db.query(Dormitory).filter(Dormitory.id == dormitory_id).first()
-    if not db_dormitory:
-        raise HTTPException(status_code=404, detail="Dormitory not found")
-    
-    update_data = dormitory_update.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_dormitory, field, value)
-    
-    db.commit()
-    db.refresh(db_dormitory)
-    return db_dormitory
-
-
-@router.delete("/{dormitory_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_dormitory(
-    dormitory_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Delete dormitory - only admins, cascade deletes applications"""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only admins can delete dormitories")
-    
-    db_dormitory = db.query(Dormitory).filter(Dormitory.id == dormitory_id).first()
-    if not db_dormitory:
-        raise HTTPException(status_code=404, detail="Dormitory not found")
-    
-    db.delete(db_dormitory)
-    db.commit()
-    return None
-
-
-# Applications endpoints
-@router.get("/applications", response_model=List[DormitoryApplicationResponse])
+@router.get("/applications/", response_model=List[DormitoryApplicationResponse])
 def get_applications(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
@@ -190,7 +112,7 @@ def get_applications(
     return result
 
 
-@router.post("/applications", response_model=DormitoryApplicationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/applications/", response_model=DormitoryApplicationResponse, status_code=status.HTTP_201_CREATED)
 def create_application(
     application: DormitoryApplicationCreate,
     db: Session = Depends(get_db),
@@ -306,5 +228,90 @@ def delete_application(
             dormitory.available_rooms += 1
     
     db.delete(db_application)
+    db.commit()
+    return None
+
+
+# ============== DORMITORY ENDPOINTS ==============
+
+@router.get("/", response_model=List[DormitoryResponse])
+def get_dormitories(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all active dormitories"""
+    dormitories = db.query(Dormitory).filter(Dormitory.is_active == True).all()
+    return dormitories
+
+
+@router.get("/{dormitory_id}", response_model=DormitoryResponse)
+def get_dormitory(
+    dormitory_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get a specific dormitory"""
+    dormitory = db.query(Dormitory).filter(Dormitory.id == dormitory_id).first()
+    if not dormitory:
+        raise HTTPException(status_code=404, detail="Dormitory not found")
+    return dormitory
+
+
+@router.post("/", response_model=DormitoryResponse, status_code=status.HTTP_201_CREATED)
+def create_dormitory(
+    dormitory: DormitoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Create dormitory - only admins"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can create dormitories")
+    
+    db_dormitory = Dormitory(**dormitory.model_dump())
+    db.add(db_dormitory)
+    db.commit()
+    db.refresh(db_dormitory)
+    return db_dormitory
+
+
+@router.put("/{dormitory_id}", response_model=DormitoryResponse)
+def update_dormitory(
+    dormitory_id: int,
+    dormitory_update: DormitoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update dormitory - only admins"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can update dormitories")
+    
+    db_dormitory = db.query(Dormitory).filter(Dormitory.id == dormitory_id).first()
+    if not db_dormitory:
+        raise HTTPException(status_code=404, detail="Dormitory not found")
+    
+    update_data = dormitory_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_dormitory, field, value)
+    
+    db.commit()
+    db.refresh(db_dormitory)
+    return db_dormitory
+
+
+@router.delete("/{dormitory_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_dormitory(
+    dormitory_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Delete dormitory - only admins, cascade deletes applications"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admins can delete dormitories")
+    
+    db_dormitory = db.query(Dormitory).filter(Dormitory.id == dormitory_id).first()
+    if not db_dormitory:
+        raise HTTPException(status_code=404, detail="Dormitory not found")
+    
+    db.delete(db_dormitory)
     db.commit()
     return None

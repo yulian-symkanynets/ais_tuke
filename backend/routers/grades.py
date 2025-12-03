@@ -1,14 +1,15 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from database import get_db
 from auth import get_current_active_user, require_teacher
 from models.user import User, UserRole
 from models.grade import Grade, GradeLetter
 from models.subject import Subject
+from models.enrollment import Enrollment, EnrollmentStatus
 
-router = APIRouter(prefix="/api/grades", tags=["grades"])
+router = APIRouter(prefix="/api/grades", tags=["Grades"])
 
 GRADE_TO_NUMERIC = {
     "A": 1.0,
@@ -35,13 +36,15 @@ class GradeCreate(GradeBase):
 class GradeUpdate(BaseModel):
     grade: Optional[GradeLetter] = None
     notes: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GradeResponse(BaseModel):
     id: int
     student_id: int
     subject_id: int
-    teacher_id: int
+    teacher_id: Optional[int] = None
     grade: GradeLetter
     numeric_grade: float
     semester: str
@@ -51,8 +54,7 @@ class GradeResponse(BaseModel):
     subject_code: Optional[str] = None
     student_name: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/", response_model=List[GradeResponse])
@@ -198,3 +200,41 @@ def delete_grade(
     db.delete(db_grade)
     db.commit()
     return None
+
+
+class EnrolledStudentResponse(BaseModel):
+    id: int
+    email: str
+    full_name: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+@router.get("/subject/{subject_id}/students", response_model=List[EnrolledStudentResponse])
+def get_enrolled_students(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_teacher)
+):
+    """Get students enrolled in a subject - for teachers to assign grades"""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    if subject.teacher_id != current_user.id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    enrollments = db.query(Enrollment).filter(
+        Enrollment.subject_id == subject_id,
+        Enrollment.status == EnrollmentStatus.CONFIRMED
+    ).all()
+    
+    students = []
+    for e in enrollments:
+        if e.student:
+            students.append(EnrolledStudentResponse(
+                id=e.student.id,
+                email=e.student.email,
+                full_name=e.student.full_name
+            ))
+    return students

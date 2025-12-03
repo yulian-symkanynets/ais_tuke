@@ -11,7 +11,9 @@ import {
   BookOpen,
   GraduationCap,
   Home,
-  CreditCard
+  CreditCard,
+  Trash2,
+  CheckCheck
 } from "lucide-react";
 import { api } from "../lib/api";
 
@@ -28,6 +30,8 @@ interface Notification {
 export function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     fetchNotifications();
@@ -38,8 +42,8 @@ export function NotificationsPage() {
       setLoading(true);
       const data = await api.get<Notification[]>("/api/notifications/");
       setNotifications(data || []);
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error);
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
     } finally {
       setLoading(false);
     }
@@ -49,8 +53,8 @@ export function NotificationsPage() {
     try {
       await api.put(`/api/notifications/${id}/read`, {});
       await fetchNotifications();
-    } catch (error) {
-      console.error("Failed to mark as read:", error);
+    } catch (err) {
+      console.error("Failed to mark as read:", err);
     }
   };
 
@@ -58,8 +62,22 @@ export function NotificationsPage() {
     try {
       await api.put("/api/notifications/read-all", {});
       await fetchNotifications();
-    } catch (error) {
-      console.error("Failed to mark all as read:", error);
+      setSuccess("All notifications marked as read");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      console.error("Failed to mark all as read:", err);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await api.delete(`/api/notifications/${id}`);
+      await fetchNotifications();
+      setSuccess("Notification deleted");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete notification");
+      setTimeout(() => setError(""), 3000);
     }
   };
 
@@ -133,11 +151,18 @@ export function NotificationsPage() {
           </Badge>
           {unreadCount > 0 && (
             <Button variant="outline" size="sm" onClick={handleMarkAllAsRead}>
+              <CheckCheck className="h-4 w-4 mr-2" />
               Mark all as read
             </Button>
           )}
         </div>
       </div>
+
+      {(error || success) && (
+        <div className={`rounded-md p-4 ${error ? 'bg-destructive/15 text-destructive' : 'bg-green-500/15 text-green-600'}`}>
+          {error || success}
+        </div>
+      )}
 
       <div className="grid gap-4">
         {notifications.length === 0 ? (
@@ -172,16 +197,27 @@ export function NotificationsPage() {
                       <p className="text-sm text-muted-foreground">
                         {notification.message}
                       </p>
-                      {!notification.read && (
+                      <div className="flex items-center gap-2 mt-3">
+                        {!notification.read && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                            Mark as read
+                          </Button>
+                        )}
                         <Button 
-                          variant="link" 
-                          size="sm" 
-                          className="mt-2 px-0 h-auto"
-                          onClick={() => handleMarkAsRead(notification.id)}
+                          variant="ghost" 
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(notification.id)}
                         >
-                          Mark as read
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
                         </Button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </CardContent>

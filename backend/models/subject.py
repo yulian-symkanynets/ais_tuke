@@ -25,3 +25,4 @@ class Subject(Base):
     enrollments = relationship("Enrollment", back_populates="subject", cascade="all, delete-orphan", passive_deletes=True)
     schedules = relationship("Schedule", back_populates="subject", cascade="all, delete-orphan", passive_deletes=True)
     grades = relationship("Grade", back_populates="subject", cascade="all, delete-orphan", passive_deletes=True)
+    assignments = relationship("Assignment", back_populates="subject", cascade="all, delete-orphan", passive_deletes=True)

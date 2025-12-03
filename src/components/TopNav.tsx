@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Bell, Moon, Sun, ChevronDown, Menu } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -11,6 +12,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Badge } from "./ui/badge";
 import { useAuth } from "../contexts/AuthContext";
+import { api } from "../lib/api";
 
 interface TopNavProps {
   onMenuClick: () => void;
@@ -18,6 +20,7 @@ interface TopNavProps {
   onToggleDarkMode: () => void;
   language: string;
   onToggleLanguage: () => void;
+  onNavigate?: (section: string) => void;
 }
 
 export function TopNav({ 
@@ -25,14 +28,39 @@ export function TopNav({
   darkMode, 
   onToggleDarkMode,
   language,
-  onToggleLanguage 
+  onToggleLanguage,
+  onNavigate
 }: TopNavProps) {
   const { user, logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+  
   const initials = user?.full_name
     ?.split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase() || user?.email[0].toUpperCase() || "U";
+
+  useEffect(() => {
+    fetchUnreadCount();
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const data = await api.get<{ count: number }>("/api/notifications/unread-count");
+      setUnreadCount(data.count);
+    } catch (err) {
+      console.error("Failed to fetch unread count:", err);
+    }
+  };
+
+  const handleNavigate = (section: string) => {
+    if (onNavigate) {
+      onNavigate(section);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card shadow-sm">
@@ -83,15 +111,21 @@ export function TopNav({
           </Button>
 
           <div className="relative">
-            <Button variant="ghost" size="icon">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => handleNavigate("notifications")}
+            >
               <Bell className="h-5 w-5" />
             </Button>
-            <Badge 
-              className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-              variant="destructive"
-            >
-              3
-            </Badge>
+            {unreadCount > 0 && (
+              <Badge 
+                className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                variant="destructive"
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </Badge>
+            )}
           </div>
 
           <DropdownMenu>
@@ -122,8 +156,23 @@ export function TopNav({
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleNavigate("profile")}>
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleNavigate("settings")}>
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleNavigate("notifications")}>
+                Notifications
+                {unreadCount > 0 && (
+                  <Badge variant="destructive" className="ml-auto">
+                    {unreadCount}
+                  </Badge>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleNavigate("activity")}>
+                Activity Log
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>Log out</DropdownMenuItem>
             </DropdownMenuContent>

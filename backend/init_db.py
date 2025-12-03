@@ -18,6 +18,8 @@ from models.enrollment import Enrollment, EnrollmentStatus
 from models.grade import Grade, GradeLetter
 from models.payment import Payment, PaymentType, PaymentStatus
 from models.notification import Notification, NotificationType
+from models.assignment import Assignment, StudentSubmission
+from models.activity_log import ActivityLog
 import bcrypt
 
 
@@ -45,7 +47,14 @@ def init_db():
             hashed_password=get_password_hash("student123"),
             full_name="John Student",
             role=UserRole.STUDENT,
-            is_active=True
+            is_active=True,
+            phone="+421 123 456 789",
+            address="Hlavná 1, Košice",
+            theme="light",
+            language="en",
+            timezone="Europe/Bratislava",
+            notifications_enabled=True,
+            two_factor_enabled=False
         )
         db.add(student)
         
@@ -54,7 +63,12 @@ def init_db():
             hashed_password=get_password_hash("student123"),
             full_name="Jane Doe",
             role=UserRole.STUDENT,
-            is_active=True
+            is_active=True,
+            theme="light",
+            language="sk",
+            timezone="Europe/Bratislava",
+            notifications_enabled=True,
+            two_factor_enabled=False
         )
         db.add(student2)
         
@@ -63,7 +77,14 @@ def init_db():
             hashed_password=get_password_hash("teacher123"),
             full_name="Dr. Maria Teacher",
             role=UserRole.TEACHER,
-            is_active=True
+            is_active=True,
+            phone="+421 987 654 321",
+            address="Letná 9, Košice",
+            theme="light",
+            language="en",
+            timezone="Europe/Bratislava",
+            notifications_enabled=True,
+            two_factor_enabled=False
         )
         db.add(teacher)
         
@@ -72,7 +93,12 @@ def init_db():
             hashed_password=get_password_hash("admin123"),
             full_name="Admin User",
             role=UserRole.ADMIN,
-            is_active=True
+            is_active=True,
+            theme="dark",
+            language="en",
+            timezone="Europe/Bratislava",
+            notifications_enabled=True,
+            two_factor_enabled=False
         )
         db.add(admin)
         
@@ -182,6 +208,7 @@ def init_db():
             {"user_id": student.id, "payment_type": PaymentType.TUITION, "description": "Tuition Fee - Winter 2025/26", "amount": 500.0, "status": PaymentStatus.PENDING, "due_date": datetime.now() + timedelta(days=30), "invoice_number": "INV-2025-0001"},
             {"user_id": student.id, "payment_type": PaymentType.DORMITORY, "description": "Dormitory Fee - October 2025", "amount": 85.0, "status": PaymentStatus.PAID, "paid_date": datetime.now() - timedelta(days=5), "invoice_number": "INV-2025-0002"},
             {"user_id": student.id, "payment_type": PaymentType.ADMINISTRATIVE, "description": "Student Card Fee", "amount": 10.0, "status": PaymentStatus.PAID, "paid_date": datetime.now() - timedelta(days=60), "invoice_number": "INV-2025-0003"},
+            {"user_id": student2.id, "payment_type": PaymentType.TUITION, "description": "Tuition Fee - Winter 2025/26", "amount": 500.0, "status": PaymentStatus.PENDING, "due_date": datetime.now() + timedelta(days=30), "invoice_number": "INV-2025-0004"},
         ]
         
         for payment_data in payments_data:
@@ -207,6 +234,86 @@ def init_db():
         
         db.commit()
         print(f"  Created {len(notifications_data)} notifications")
+        
+        # Create assignments
+        print("Creating assignments...")
+        assignments_data = [
+            {
+                "subject_id": created_subjects[0].id,
+                "teacher_id": teacher.id,
+                "title": "Create a Personal Portfolio Website",
+                "description": "Build a responsive personal portfolio website using HTML, CSS, and JavaScript. Include sections for About, Projects, and Contact.",
+                "due_date": datetime.now() + timedelta(days=14),
+                "max_points": 100
+            },
+            {
+                "subject_id": created_subjects[0].id,
+                "teacher_id": teacher.id,
+                "title": "JavaScript DOM Manipulation Exercise",
+                "description": "Complete the interactive form validation exercise using vanilla JavaScript.",
+                "due_date": datetime.now() + timedelta(days=7),
+                "max_points": 50
+            },
+            {
+                "subject_id": created_subjects[1].id,
+                "teacher_id": teacher.id,
+                "title": "Database Design Project",
+                "description": "Design a normalized database schema for an e-commerce application. Include ER diagram and SQL scripts.",
+                "due_date": datetime.now() + timedelta(days=21),
+                "max_points": 150
+            },
+            {
+                "subject_id": created_subjects[2].id,
+                "teacher_id": teacher.id,
+                "title": "Python Programming Assignment",
+                "description": "Implement a simple command-line calculator with basic arithmetic operations.",
+                "due_date": datetime.now() + timedelta(days=10),
+                "max_points": 75
+            },
+        ]
+        
+        created_assignments = []
+        for assign_data in assignments_data:
+            assign = Assignment(**assign_data)
+            db.add(assign)
+            created_assignments.append(assign)
+        
+        db.commit()
+        for assign in created_assignments:
+            db.refresh(assign)
+        print(f"  Created {len(assignments_data)} assignments")
+        
+        # Create a sample submission
+        print("Creating sample submission...")
+        submission = StudentSubmission(
+            assignment_id=created_assignments[1].id,
+            student_id=student.id,
+            text_answer="Here is my solution to the DOM manipulation exercise. I used event listeners and querySelector to validate the form fields.",
+            grade=45,
+            feedback="Good work! Consider adding more error messages for edge cases."
+        )
+        db.add(submission)
+        db.commit()
+        print(f"  Created 1 sample submission")
+        
+        # Create activity logs
+        print("Creating activity logs...")
+        activity_logs_data = [
+            {"user_id": student.id, "action": "login_success", "details": "Logged in successfully", "ip_address": "192.168.1.100", "user_agent": "Mozilla/5.0 Chrome/120.0"},
+            {"user_id": student.id, "action": "profile_updated", "details": "Updated fields: phone, address", "ip_address": "192.168.1.100", "user_agent": "Mozilla/5.0 Chrome/120.0"},
+            {"user_id": student.id, "action": "settings_changed", "details": "Updated settings: notifications_enabled", "ip_address": "192.168.1.100", "user_agent": "Mozilla/5.0 Chrome/120.0"},
+            {"user_id": teacher.id, "action": "login_success", "details": "Logged in successfully", "ip_address": "192.168.1.101", "user_agent": "Mozilla/5.0 Firefox/121.0"},
+            {"user_id": teacher.id, "action": "grade_added", "details": "Added grade for Web Technologies", "ip_address": "192.168.1.101", "user_agent": "Mozilla/5.0 Firefox/121.0"},
+            {"user_id": admin.id, "action": "login_success", "details": "Logged in successfully", "ip_address": "192.168.1.102", "user_agent": "Mozilla/5.0 Safari/17.0"},
+            {"user_id": admin.id, "action": "payment_created", "details": "Created payment INV-2025-0001", "ip_address": "192.168.1.102", "user_agent": "Mozilla/5.0 Safari/17.0"},
+        ]
+        
+        for log_data in activity_logs_data:
+            log = ActivityLog(**log_data)
+            db.add(log)
+        
+        db.commit()
+        print(f"  Created {len(activity_logs_data)} activity logs")
         
         print("\n" + "="*50)
         print("Database initialized successfully!")
